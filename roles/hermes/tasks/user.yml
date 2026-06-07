@@ -23,6 +23,7 @@
     groups: "{{ hermes_user_groups }}"
     shell: "{{ hermes_user_shell }}"
     create_home: true
+    password_lock: true
     state: present
   become: true
 
