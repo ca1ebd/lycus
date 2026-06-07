@@ -37,7 +37,7 @@ lycus/
 | `hermes_user` | `hermes` | User created on the VM |
 | `hermes_user_shell` | `/bin/bash` | Login shell |
 | `hermes_user_groups` | `[sudo]` | Supplemental groups |
-| `hermes_ssh_public_keys` | ed25519 key from this machine | Keys added to authorized_keys |
+| `hermes_ssh_public_keys` | keys from this server's authorized_keys | Keys added to authorized_keys |
 | `hermes_install_script` | `https://hermes-agent.nousresearch.com/install.sh` | Installer URL |
 
 ## Running
