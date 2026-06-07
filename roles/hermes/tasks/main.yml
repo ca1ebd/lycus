@@ -1,0 +1,9 @@
+---
+- name: Import user setup tasks
+  ansible.builtin.import_tasks: user.yml
+
+- name: Import SSH hardening tasks
+  ansible.builtin.import_tasks: ssh_hardening.yml
+
+- name: Import Hermes install tasks
+  ansible.builtin.import_tasks: install.yml
