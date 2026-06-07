@@ -1,0 +1,10 @@
+---
+hermes_user: hermes
+hermes_user_shell: /bin/bash
+hermes_user_groups:
+  - sudo
+
+hermes_ssh_public_keys:
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILH6+EuMRFvPotLSTsagFZsBhn5i9E0wGYBkXYc1sx4Z hermes@165.227.99.52"
+
+hermes_install_script: "https://hermes-agent.nousresearch.com/install.sh"
