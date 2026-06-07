@@ -6,7 +6,6 @@
     line: "PasswordAuthentication no"
     state: present
   become: true
-  notify: Restart sshd
 
 - name: Disable SSH root login
   ansible.builtin.lineinfile:
@@ -15,7 +14,6 @@
     line: "PermitRootLogin no"
     state: present
   become: true
-  notify: Restart sshd
 
 - name: Enable public key authentication
   ansible.builtin.lineinfile:
@@ -24,4 +22,9 @@
     line: "PubkeyAuthentication yes"
     state: present
   become: true
-  notify: Restart sshd
+
+- name: Restart sshd to apply config
+  ansible.builtin.service:
+    name: sshd
+    state: restarted
+  become: true

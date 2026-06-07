@@ -1,0 +1,54 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+
+  tasks:
+    - name: Check hermes user exists
+      ansible.builtin.getent:
+        database: passwd
+        key: hermes
+      register: hermes_user_entry
+
+    - name: Assert hermes user exists
+      ansible.builtin.assert:
+        that: hermes_user_entry.ansible_facts.getent_passwd.hermes is defined
+        fail_msg: "hermes user was not created"
+
+    - name: Check authorized_keys exists and is non-empty
+      ansible.builtin.stat:
+        path: /home/hermes/.ssh/authorized_keys
+      register: auth_keys
+
+    - name: Assert authorized_keys exists
+      ansible.builtin.assert:
+        that: auth_keys.stat.exists and auth_keys.stat.size > 0
+        fail_msg: "authorized_keys missing or empty"
+
+    - name: Check sshd_config disables password auth
+      ansible.builtin.command: grep -E "^PasswordAuthentication no" /etc/ssh/sshd_config
+      changed_when: false
+
+    - name: Check sshd_config disables root login
+      ansible.builtin.command: grep -E "^PermitRootLogin no" /etc/ssh/sshd_config
+      changed_when: false
+
+    - name: Check sudoers drop-in exists
+      ansible.builtin.stat:
+        path: /etc/sudoers.d/hermes
+      register: sudoers_file
+
+    - name: Assert sudoers drop-in exists
+      ansible.builtin.assert:
+        that: sudoers_file.stat.exists
+        fail_msg: "sudoers drop-in for hermes not found"
+
+    - name: Check hermes binary exists
+      ansible.builtin.stat:
+        path: /home/hermes/.local/bin/hermes
+      register: hermes_bin
+
+    - name: Assert hermes binary exists
+      ansible.builtin.assert:
+        that: hermes_bin.stat.exists
+        fail_msg: "hermes binary not found at ~/.local/bin/hermes"
