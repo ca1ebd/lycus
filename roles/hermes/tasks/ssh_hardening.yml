@@ -1,0 +1,34 @@
+---
+- name: Disable SSH password authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PasswordAuthentication"
+    line: "PasswordAuthentication no"
+    state: present
+  become: true
+  register: sshd_pw_auth
+
+- name: Disable SSH root login
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PermitRootLogin"
+    line: "PermitRootLogin no"
+    state: present
+  become: true
+  register: sshd_root_login
+
+- name: Enable public key authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PubkeyAuthentication"
+    line: "PubkeyAuthentication yes"
+    state: present
+  become: true
+  register: sshd_pubkey
+
+- name: Restart sshd to apply config
+  ansible.builtin.service:
+    name: sshd
+    state: restarted
+  become: true
+  when: sshd_pw_auth.changed or sshd_root_login.changed or sshd_pubkey.changed

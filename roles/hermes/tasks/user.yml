@@ -1,0 +1,45 @@
+---
+- name: Install prerequisite packages
+  ansible.builtin.apt:
+    name:
+      - git
+      - curl
+      - sudo
+      - openssh-server
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: Create hermes group
+  ansible.builtin.group:
+    name: "{{ hermes_user }}"
+    state: present
+  become: true
+
+- name: Create hermes user
+  ansible.builtin.user:
+    name: "{{ hermes_user }}"
+    group: "{{ hermes_user }}"
+    groups: "{{ hermes_user_groups }}"
+    shell: "{{ hermes_user_shell }}"
+    create_home: true
+    password_lock: true
+    state: present
+  become: true
+
+- name: Add SSH authorized keys
+  ansible.posix.authorized_key:
+    user: "{{ hermes_user }}"
+    key: "{{ item }}"
+    state: present
+  loop: "{{ hermes_ssh_public_keys }}"
+  become: true
+
+- name: Allow hermes passwordless sudo
+  ansible.builtin.copy:
+    content: "{{ hermes_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    dest: "/etc/sudoers.d/{{ hermes_user }}"
+    mode: "0440"
+    validate: visudo -cf %s
+  become: true
