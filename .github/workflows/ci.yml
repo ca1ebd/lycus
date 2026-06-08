@@ -26,7 +26,12 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run Molecule
-        run: molecule test
+        run: |
+          molecule test 2>&1 | tee /tmp/molecule-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo "## Molecule Output" >> $GITHUB_STEP_SUMMARY
+          tail -150 /tmp/molecule-output.txt >> $GITHUB_STEP_SUMMARY
+          exit $EXIT_CODE
         working-directory: roles/hermes
         env:
           PY_COLORS: "1"
