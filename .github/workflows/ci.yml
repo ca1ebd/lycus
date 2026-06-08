@@ -23,8 +23,11 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install ansible molecule molecule-plugins[docker] docker
+        run: pip install -r requirements.txt
 
       - name: Run Molecule
         run: molecule test
         working-directory: roles/hermes
+        env:
+          PY_COLORS: "1"
+          ANSIBLE_FORCE_COLOR: "1"

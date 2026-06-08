@@ -1,14 +1,17 @@
 ---
 dependency:
   name: galaxy
+  options:
+    ignore-certs: true
+    ignore-errors: true
 
 driver:
   name: docker
 
 platforms:
   - name: instance
-    image: geerlingguy/docker-ubuntu2204-ansible
-    command: /lib/systemd/systemd
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    command: ""
     cgroupns_mode: host
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -17,6 +20,9 @@ platforms:
 
 provisioner:
   name: ansible
+  config_options:
+    defaults:
+      interpreter_python: auto_silent
 
 verifier:
   name: ansible
