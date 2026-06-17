@@ -1,6 +1,7 @@
 ---
 - name: Install Hermes Agent
   hosts: hermes_servers
+  become: true
   gather_facts: true
 
   roles:

@@ -9,9 +9,8 @@ Ansible automation to provision Ubuntu VMs with Hermes Agent (NousResearch).
 
 ```
 lycus/
-├── ansible.cfg                        # inventory=inventory/hosts.ini, become=sudo
-├── inventory/hosts.ini                # [hermes_servers] — fill in VM IPs before running
-├── playbooks/hermes.yml               # entry point: hosts=hermes_servers, role=hermes
+├── inventory/hosts.yml                # hermes_servers group — fill in VM IPs before running
+├── playbooks/hermes.yml               # entry point: hosts=hermes_servers, become=true, role=hermes
 └── roles/hermes/
     ├── defaults/main.yml              # all tuneable vars (user, shell, groups, SSH keys, install URL)
     ├── handlers/main.yml              # restart sshd
@@ -44,9 +43,9 @@ lycus/
 
 ```bash
 # Fill in inventory first
-vim inventory/hosts.ini   # ansible_host=<IP> ansible_user=ubuntu (or root)
+vim inventory/hosts.yml   # ansible_host: <IP>, ansible_user: ubuntu (or root)
 
-ansible-playbook playbooks/hermes.yml
+ansible-playbook -i inventory/hosts.yml playbooks/hermes.yml
 ```
 
 ## Hermes Agent
