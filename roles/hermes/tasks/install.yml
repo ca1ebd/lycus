@@ -1,0 +1,50 @@
+---
+- name: Check if Hermes is already installed
+  ansible.builtin.stat:
+    path: "/home/{{ hermes_user }}/.local/bin/hermes"
+  register: hermes_bin
+
+- name: Download Hermes install script
+  ansible.builtin.get_url:
+    url: "{{ hermes_install_script }}"
+    dest: "/tmp/hermes-install.sh"
+    mode: "0755"
+  when: not hermes_bin.stat.exists
+
+- name: Run Hermes install script
+  ansible.builtin.shell:
+    cmd: bash /tmp/hermes-install.sh
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ hermes_user }}"
+    USER: "{{ hermes_user }}"
+  become: true
+  become_user: "{{ hermes_user }}"
+  when: not hermes_bin.stat.exists
+
+- name: Clean up install script
+  ansible.builtin.file:
+    path: /tmp/hermes-install.sh
+    state: absent
+
+- name: Ensure hermes binary is on PATH in .bashrc
+  ansible.builtin.lineinfile:
+    path: "/home/{{ hermes_user }}/.bashrc"
+    line: 'export PATH="$HOME/.local/bin:$PATH"'
+    state: present
+  become: true
+  become_user: "{{ hermes_user }}"
+
+- name: Ensure hermes binary is on PATH in .profile
+  ansible.builtin.lineinfile:
+    path: "/home/{{ hermes_user }}/.profile"
+    line: 'export PATH="$HOME/.local/bin:$PATH"'
+    state: present
+  become: true
+  become_user: "{{ hermes_user }}"
+
+- name: Verify Hermes binary exists after install
+  ansible.builtin.stat:
+    path: "/home/{{ hermes_user }}/.local/bin/hermes"
+  register: hermes_bin_post
+  failed_when: not hermes_bin_post.stat.exists
