@@ -127,8 +127,10 @@ ansible-playbook ... --tags base,user,ssh
 ### The Hermes installer picks its layout from the effective uid
 
 Not from a flag. As root it uses `/usr/local/lib/hermes-agent` with the command
-in `/usr/local/bin`; as any other user it uses `$HERMES_HOME/hermes-agent` with
-the command in `~/.local/bin`. Both work. Only one matches this spec.
+in `/usr/local/bin` — a conventional system-wide install, which the installer
+calls its "FHS layout" after the Filesystem Hierarchy Standard. As any other user
+it uses `$HERMES_HOME/hermes-agent` with the command in `~/.local/bin`. Both
+work. Only one matches this spec.
 
 So `roles/hermes` runs the installer as **root**, with `HERMES_HOME` pointed at
 the hermes user's home. Changing it to `become_user: hermes` looks like a

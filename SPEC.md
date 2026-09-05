@@ -42,8 +42,11 @@ Agent credentials (`ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`,
 
 **Root installs the code; the `hermes` user runs it.**
 
-- `install.sh` runs as root, so it resolves its FHS layout: code at
-  `/usr/local/lib/hermes-agent`, command at `/usr/local/bin/hermes`.
+- `install.sh` runs as root, so it resolves its **FHS layout** — the installer's
+  name for a conventional system-wide install, after the Filesystem Hierarchy
+  Standard, which puts locally-installed software under `/usr/local`. Code at
+  `/usr/local/lib/hermes-agent`, command at `/usr/local/bin/hermes`. This is how
+  Claude Code and Codex CLI install too.
 - `HERMES_HOME` is `/home/hermes/.hermes`, so the agent owns its own state even
   though root installed the binary.
 - The gateway runs from a **system** unit, `/etc/systemd/system/hermes-gateway.service`,

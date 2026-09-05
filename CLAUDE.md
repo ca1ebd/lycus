@@ -35,8 +35,9 @@ lycus/
 ## Things that look like bugs and are not
 
 - **The Hermes installer runs as root.** It picks its layout from the effective
-  uid, not a flag. As root: `/usr/local/lib/hermes-agent` + `/usr/local/bin/hermes`.
-  As any other user: `~/.hermes/hermes-agent` + `~/.local/bin`. Changing this to
+  uid, not a flag. As root it does a conventional system-wide install (its "FHS
+  layout"): `/usr/local/lib/hermes-agent` + `/usr/local/bin/hermes`. As any other
+  user: `~/.hermes/hermes-agent` + `~/.local/bin`. Changing this to
   `become_user: hermes` looks safer and just builds a different machine — the
   agent already runs unprivileged via the unit's `User=`. See adr/0002.
 - **`hermes gateway install` is called explicitly.** `install.sh` offers to do it

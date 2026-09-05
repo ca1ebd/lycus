@@ -11,7 +11,9 @@ because `install.sh` chooses its layout from the **effective uid**, not from any
 flag:
 
 - as root on Linux: code at `/usr/local/lib/hermes-agent`, command in
-  `/usr/local/bin`, data at `$HERMES_HOME`
+  `/usr/local/bin`, data at `$HERMES_HOME` — the installer calls this its "FHS
+  layout", after the Filesystem Hierarchy Standard, which is the convention that
+  locally-installed software lives under `/usr/local`
 - as any other user: code at `$HERMES_HOME/hermes-agent`, command in
   `~/.local/bin`
 
