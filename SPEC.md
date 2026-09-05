@@ -58,10 +58,13 @@ Two things about the installer are load-bearing and easy to get wrong:
    the `hermes` user instead produces `~/.hermes/hermes-agent` with the command
    in `~/.local/bin` — a working install, but a different one. It fails silently
    in the sense that nothing errors; you simply get the wrong machine.
-2. It offers to install the systemd unit only behind an interactive prompt, and
-   short-circuits at `if ! (: </dev/tty)` with "Gateway setup skipped (no
-   terminal available)". Under Ansible there is never a TTY, so the unit is
-   never created unless something calls `hermes gateway install` explicitly.
+2. It ends with an interactive setup wizard, and separately offers to install
+   the gateway's systemd unit. Both are guarded by `(: </dev/tty)` — and that
+   guard is **not** enough under Ansible, which allocates a pseudo terminal for
+   `become`. `/dev/tty` therefore exists, the guard passes, and the wizard
+   blocks on input that never comes. So the installer is invoked with
+   `--non-interactive --skip-setup`, and the unit is created by calling
+   `hermes gateway install` explicitly.
 
 The gateway is **enabled but not started** by a normal provision run. Starting it
 is a cutover step: a fresh host has no credentials, and during a migration the

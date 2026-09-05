@@ -19,9 +19,22 @@ hermes_command_path: /usr/local/bin/hermes
 # home rather than root's, so the agent running as hermes owns its own state.
 hermes_home: "/home/{{ hermes_user }}/.hermes"
 
-# Install and enable the gateway service. install.sh only offers this behind an
-# interactive prompt and short-circuits on `if ! (: </dev/tty)`, so under Ansible
-# it never runs — the role has to invoke `hermes gateway install` itself.
+# Flags that keep install.sh from blocking forever.
+#
+# The installer ends by running its interactive setup wizard, and separately
+# offers to install the gateway service. Both are guarded by `(: </dev/tty)` —
+# but that guard does NOT save you under Ansible: Ansible allocates a pseudo
+# terminal for become, so /dev/tty exists, the guard passes, and the wizard sits
+# waiting on input that never arrives. Observed hanging for 10+ minutes at 0%
+# CPU before this was pinned down.
+#
+# So do not rely on the TTY check. Ask for non-interactive explicitly.
+hermes_install_args: "--non-interactive --skip-setup"
+
+# Install and enable the gateway service. With --non-interactive the installer
+# never offers to do this, so the role invokes `hermes gateway install` itself.
+# That is the more robust arrangement anyway: it does not depend on whether a
+# TTY happened to be present.
 hermes_gateway_service: true
 hermes_gateway_service_name: hermes-gateway
 

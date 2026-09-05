@@ -40,9 +40,11 @@ lycus/
   user: `~/.hermes/hermes-agent` + `~/.local/bin`. Changing this to
   `become_user: hermes` looks safer and just builds a different machine — the
   agent already runs unprivileged via the unit's `User=`. See adr/0002.
-- **`hermes gateway install` is called explicitly.** `install.sh` offers to do it
-  only behind an interactive prompt and bails at `if ! (: </dev/tty)`. Ansible
-  never has a TTY, so the offer is unreachable.
+- **`install.sh` gets `--non-interactive --skip-setup`.** Its setup wizard and
+  gateway offer are guarded by `(: </dev/tty)`, which is NOT enough under
+  Ansible: `become` allocates a pseudo terminal, so the guard passes and the
+  wizard blocks forever on input. The role calls `hermes gateway install`
+  itself instead of relying on the offer.
 - **The gateway is enabled but not started.** Starting it is a cutover decision;
   two gateways polling one bot token fight. Set `hermes_gateway_started: true`.
 - **`vm_agent_enabled` defaults true on Proxmox.** It controls whether the VirtIO

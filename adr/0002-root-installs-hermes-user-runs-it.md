@@ -22,10 +22,12 @@ Both produce a working install. The role originally ran the installer with
 ran the first. Nothing errored; the machine was simply different from the one
 that was documented.
 
-A related trap: the installer offers to install the gateway's systemd unit only
-behind an interactive prompt, and short-circuits earlier at
-`if ! (: </dev/tty)` with "Gateway setup skipped (no terminal available)". Under
-Ansible there is never a TTY, so that offer is permanently unreachable.
+A related trap: the installer ends with an interactive setup wizard and
+separately offers to install the gateway's systemd unit. Both are guarded by
+`(: </dev/tty)`, which reads like adequate protection for unattended runs and is
+not — Ansible allocates a pseudo terminal for `become`, so `/dev/tty` exists and
+the guard passes. In practice the wizard blocked a provisioning run for over ten
+minutes at 0% CPU before this was diagnosed.
 
 ## Decision
 
@@ -35,7 +37,9 @@ from a **system** unit with `User=hermes` / `Group=hermes`.
 
 The agent process never has root. Only the install step does.
 
-The role calls `hermes gateway install` explicitly, since the installer cannot.
+The installer is invoked with `--non-interactive --skip-setup`, and the role
+calls `hermes gateway install` explicitly rather than relying on the installer's
+offer — which is both more robust and independent of whether a TTY exists.
 
 ### Alternative considered: a fully user-scoped install
 

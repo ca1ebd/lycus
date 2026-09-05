@@ -139,11 +139,18 @@ unit's `User=`, and the change would quietly build a different machine. There is
 an assertion in `roles/hermes/tasks/gateway.yml` that fails the run if the unit
 is ever set to run as anyone but `hermes`.
 
-### The installer cannot create the gateway service under Ansible
+### The installer will hang unless told not to be interactive
 
-It offers to, but only behind an interactive prompt, and it short-circuits
-earlier at `if ! (: </dev/tty)`. Ansible never has a TTY, so the offer is
-unreachable and the role calls `hermes gateway install` itself.
+`install.sh` finishes by running its setup wizard, and separately offers to
+install the gateway unit. Both are guarded by `(: </dev/tty)`, which looks like
+it makes them safe to run unattended. It does not: **Ansible allocates a pseudo
+terminal for `become`**, so `/dev/tty` exists, the guard passes, and the wizard
+sits waiting on input forever — observed hanging for over ten minutes at 0% CPU.
+
+The role therefore passes `--non-interactive --skip-setup` rather than trusting
+the guard, and creates the unit itself with `hermes gateway install`. Doing it
+explicitly is the more robust arrangement anyway: it does not depend on whether
+a TTY happened to be allocated.
 
 ### The gateway is enabled but not started
 

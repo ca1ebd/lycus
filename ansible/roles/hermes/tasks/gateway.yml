@@ -1,8 +1,9 @@
 ---
 # install.sh offers to install the systemd unit only behind an interactive
-# prompt, and bails out earlier at `if ! (: </dev/tty)` with "Gateway setup
-# skipped (no terminal available)". Ansible never has a TTY, so the unit is
-# never created and we invoke the CLI's own installer explicitly.
+# prompt, and we run it with --non-interactive, so the offer never happens.
+# Invoking the CLI's installer ourselves is also the more robust arrangement:
+# it does not depend on whether a TTY happened to be present, which under
+# Ansible is not the "never" it looks like — see hermes_install_args.
 #
 # Run as root, which gives a *system* unit at /etc/systemd/system with
 # User=hermes — the agent process itself never has root.

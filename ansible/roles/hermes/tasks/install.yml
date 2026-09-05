@@ -27,9 +27,12 @@
   become: true
   when: not hermes_bin.stat.exists
 
+# hermes_install_args carries --non-interactive --skip-setup. Without them the
+# installer's setup wizard blocks forever: Ansible gives the task a pseudo
+# terminal, so the installer's own "no terminal available" guard does not fire.
 - name: Run the Hermes install script as root
   ansible.builtin.command:
-    cmd: bash /tmp/hermes-install.sh
+    cmd: "bash /tmp/hermes-install.sh {{ hermes_install_args }}"
   environment:
     HERMES_HOME: "{{ hermes_home }}"
   become: true
