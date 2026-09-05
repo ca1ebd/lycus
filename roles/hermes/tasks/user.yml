@@ -5,6 +5,9 @@
       - git
       - curl
       - sudo
+      # ssh_hardening.yml edits sshd_config, so the server has to be present
+      # for the role to be self-contained on a minimal image.
+      - openssh-server
     state: present
     update_cache: true
     cache_valid_time: 3600

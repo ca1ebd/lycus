@@ -1,0 +1,57 @@
+---
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  molecule:
+    name: Molecule
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Molecule
+        id: molecule
+        run: molecule test 2>&1 | tee /tmp/molecule-output.txt; exit ${PIPESTATUS[0]}
+        working-directory: roles/hermes
+        continue-on-error: true
+        env:
+          PY_COLORS: "0"
+          ANSIBLE_FORCE_COLOR: "0"
+
+      - name: Post molecule output as PR comment on failure
+        if: steps.molecule.outcome == 'failure' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const raw = fs.readFileSync('/tmp/molecule-output.txt', 'utf8');
+            const lines = raw.split('\n');
+            const truncated = lines.slice(-120).join('\n');
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '## Molecule failure output\n```\n' + truncated + '\n```'
+            });
+
+      - name: Fail if molecule failed
+        if: always() && steps.molecule.outcome == 'failure'
+        run: exit 1
