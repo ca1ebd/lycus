@@ -7,3 +7,4 @@
 
 - name: Import Hermes install tasks
   ansible.builtin.import_tasks: install.yml
+  when: hermes_install_agent | bool

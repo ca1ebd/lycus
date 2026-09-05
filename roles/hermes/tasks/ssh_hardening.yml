@@ -1,4 +1,8 @@
 ---
+# sshd_config is edited line-by-line rather than templated so we only touch the
+# three directives we care about and leave the distro's file otherwise intact.
+# Each edit registers its own result and the restart is conditional on them, so
+# a converged host doesn't bounce sshd on every run.
 - name: Disable SSH password authentication
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
@@ -6,7 +10,7 @@
     line: "PasswordAuthentication no"
     state: present
   become: true
-  notify: Restart sshd
+  register: sshd_pw_auth
 
 - name: Disable SSH root login
   ansible.builtin.lineinfile:
@@ -15,7 +19,7 @@
     line: "PermitRootLogin no"
     state: present
   become: true
-  notify: Restart sshd
+  register: sshd_root_login
 
 - name: Enable public key authentication
   ansible.builtin.lineinfile:
@@ -24,4 +28,31 @@
     line: "PubkeyAuthentication yes"
     state: present
   become: true
-  notify: Restart sshd
+  register: sshd_pubkey
+
+# `sshd -t` refuses to run without its privilege-separation directory. On a
+# running host ssh.service creates it via RuntimeDirectory=, but it is absent
+# wherever /run is a fresh tmpfs (containers, first boot before sshd starts),
+# so create it explicitly rather than skipping the validation.
+- name: Ensure the sshd privilege separation directory exists
+  ansible.builtin.file:
+    path: /run/sshd
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  when: sshd_pw_auth.changed or sshd_root_login.changed or sshd_pubkey.changed
+
+- name: Validate sshd config before restarting
+  ansible.builtin.command: sshd -t
+  become: true
+  changed_when: false
+  when: sshd_pw_auth.changed or sshd_root_login.changed or sshd_pubkey.changed
+
+- name: Restart sshd to apply config
+  ansible.builtin.service:
+    name: "{{ hermes_sshd_service }}"
+    state: restarted
+  become: true
+  when: sshd_pw_auth.changed or sshd_root_login.changed or sshd_pubkey.changed

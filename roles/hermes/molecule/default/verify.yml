@@ -1,0 +1,82 @@
+---
+# Covers everything the role does with hermes_install_agent=false: the user,
+# its keys and sudo rights, and the three sshd directives. The installer itself
+# is deliberately out of scope here — see converge.yml.
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Read the hermes user from passwd
+      ansible.builtin.getent:
+        database: passwd
+        key: hermes
+      register: hermes_passwd
+
+    - name: Assert the hermes user exists with the expected shell
+      ansible.builtin.assert:
+        that:
+          - hermes_passwd.ansible_facts.getent_passwd.hermes is defined
+          - hermes_passwd.ansible_facts.getent_passwd.hermes[5] == "/bin/bash"
+        fail_msg: "hermes user missing, or its login shell is not /bin/bash"
+
+    - name: Read the sudo group
+      ansible.builtin.getent:
+        database: group
+        key: sudo
+      register: sudo_group
+
+    - name: Assert hermes is in the sudo group
+      ansible.builtin.assert:
+        that: "'hermes' in sudo_group.ansible_facts.getent_group.sudo[2]"
+        fail_msg: "hermes is not a member of the sudo group"
+
+    - name: Read the shadow entry for hermes
+      ansible.builtin.command: getent shadow hermes
+      register: hermes_shadow
+      changed_when: false
+
+    - name: Assert the hermes password is locked
+      ansible.builtin.assert:
+        that: hermes_shadow.stdout.split(':')[1].startswith('!')
+        fail_msg: "hermes password is not locked — SSH key should be the only login path"
+
+    - name: Read authorized_keys
+      ansible.builtin.slurp:
+        src: /home/hermes/.ssh/authorized_keys
+      register: authorized_keys
+
+    - name: Assert both public keys are authorized
+      ansible.builtin.assert:
+        that:
+          - "'cdqt98@gmail.com' in (authorized_keys.content | b64decode)"
+          - "'Termius' in (authorized_keys.content | b64decode)"
+        fail_msg: "expected both the primary and Termius keys in authorized_keys"
+
+    - name: Read the sudoers drop-in
+      ansible.builtin.slurp:
+        src: /etc/sudoers.d/hermes
+      register: sudoers_dropin
+
+    - name: Assert passwordless sudo is granted
+      ansible.builtin.assert:
+        that: "'hermes ALL=(ALL) NOPASSWD:ALL' in (sudoers_dropin.content | b64decode)"
+        fail_msg: "sudoers drop-in does not grant hermes passwordless sudo"
+
+    - name: Read sshd_config
+      ansible.builtin.slurp:
+        src: /etc/ssh/sshd_config
+      register: sshd_config
+
+    - name: Assert sshd is hardened
+      ansible.builtin.assert:
+        that:
+          - "'PasswordAuthentication no' in (sshd_config.content | b64decode)"
+          - "'PermitRootLogin no' in (sshd_config.content | b64decode)"
+          - "'PubkeyAuthentication yes' in (sshd_config.content | b64decode)"
+        fail_msg: "sshd_config is missing one or more expected hardening directives"
+
+    - name: Assert sshd accepts the resulting config
+      ansible.builtin.command: sshd -t
+      changed_when: false
