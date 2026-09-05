@@ -1,0 +1,97 @@
+---
+- name: Fail early if no archive was given
+  ansible.builtin.fail:
+    msg: >-
+      restore_archive is not set. Point it at a tarball from backup/capture.sh,
+      or skip this role with --skip-tags restore.
+  when: restore_archive | length == 0
+
+- name: Check for existing agent state
+  ansible.builtin.stat:
+    path: "{{ hermes_home }}/state.db"
+  register: restore_existing_state
+
+# Restoring over a live state.db would silently clobber conversation history.
+- name: Refuse to overwrite existing agent state
+  ansible.builtin.fail:
+    msg: >-
+      {{ hermes_home }}/state.db already exists. Set restore_force=true to
+      overwrite it, having confirmed it is not the copy you want to keep.
+  when:
+    - restore_existing_state.stat.exists
+    - not (restore_force | bool)
+
+- name: Stop the gateway before restoring over its state
+  ansible.builtin.systemd_service:
+    name: "{{ hermes_gateway_service_name }}"
+    state: stopped
+  become: true
+  failed_when: false
+
+- name: Restore the home-directory archive
+  ansible.builtin.unarchive:
+    src: "{{ restore_archive }}"
+    dest: "/home/{{ hermes_user }}"
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_user }}"
+  become: true
+
+- name: Restore repositories with no remote
+  ansible.builtin.unarchive:
+    src: "{{ restore_repos_archive }}"
+    dest: "{{ restore_repos_dest }}"
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_user }}"
+  become: true
+  when: restore_repos_archive | length > 0
+
+- name: Ensure the agent owns everything restored
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_user }}"
+    recurse: true
+    state: directory
+  loop:
+    - "{{ hermes_home }}"
+    - "/home/{{ hermes_user }}/.ssh"
+  become: true
+
+# The tarball is extracted with archive permissions, but SSH is unforgiving:
+# a group- or world-readable private key makes sshd refuse the key outright.
+- name: Restore strict permissions on the SSH directory
+  ansible.builtin.file:
+    path: "/home/{{ hermes_user }}/.ssh"
+    state: directory
+    mode: "0700"
+  become: true
+
+- name: Find SSH private keys
+  ansible.builtin.find:
+    paths: "/home/{{ hermes_user }}/.ssh"
+    excludes: "*.pub,known_hosts*,config,authorized_keys"
+    file_type: file
+  register: restore_ssh_keys
+  become: true
+
+- name: Restore strict permissions on SSH private keys
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "0600"
+  loop: "{{ restore_ssh_keys.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  become: true
+
+- name: Restore strict permissions on the agent data directory
+  ansible.builtin.file:
+    path: "{{ hermes_home }}"
+    state: directory
+    mode: "0700"
+  become: true
+
+- name: Verify the agent state landed
+  ansible.builtin.stat:
+    path: "{{ hermes_home }}/state.db"
+  register: restore_state_post
+  failed_when: not restore_state_post.stat.exists

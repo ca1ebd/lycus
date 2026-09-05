@@ -30,7 +30,7 @@ jobs:
       - name: Run Molecule
         id: molecule
         run: molecule test 2>&1 | tee /tmp/molecule-output.txt; exit ${PIPESTATUS[0]}
-        working-directory: roles/hermes
+        working-directory: ansible
         continue-on-error: true
         env:
           PY_COLORS: "0"

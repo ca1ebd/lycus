@@ -1,0 +1,43 @@
+---
+# Swap. The production host runs a 4 GB file at swappiness 10 — sized roughly to
+# RAM on the old 4 GB droplet, after an OOM kill took out the gateway and lost
+# its in-memory conversation context. See docs/swap-setup-spec.md.
+base_swap_enabled: true
+base_swap_file: /swapfile
+base_swap_size_mb: 4096
+base_swappiness: 10
+
+base_timezone: Etc/UTC
+
+# Unattended security upgrades. Deliberately security-only and without automatic
+# reboots: this host runs a long-lived agent process, and a surprise reboot loses
+# whatever it was doing.
+base_unattended_upgrades: true
+
+# qemu-guest-agent lets Proxmox report guest IPs and do clean shutdowns. Harmless
+# elsewhere, so it is keyed off the detected virtualisation rather than the target.
+base_install_qemu_guest_agent: true
+
+# ufw is deliberately left alone. The homelab VLAN sits behind the UniFi gateway
+# and the migrated host has no public address; enabling a host firewall here would
+# be inherited config rather than a decision. Flip this if that ever changes.
+base_manage_firewall: false
+
+base_packages:
+  # Needed whenever a task uses become_user to reach a NON-root user (here,
+  # hermes). Ansible writes its module to a 0600 temp file as root, so the target
+  # user cannot read it; rather than world-reading it — which would expose task
+  # arguments, secrets included, to every user on the box — Ansible grants that
+  # one user access with setfacl. Without the acl package there is no setfacl, so
+  # it falls back to `chmod A+user:hermes:rx:allow`, which is NFSv4/Solaris ACL
+  # syntax that GNU chmod rejects, and every become_user task fails.
+  - acl
+  - ca-certificates
+  - curl
+  - git
+  - gnupg
+  - jq
+  - sudo
+  # ssh_hardening edits sshd_config, so the server must exist for the role to be
+  # self-contained on a minimal image.
+  - openssh-server

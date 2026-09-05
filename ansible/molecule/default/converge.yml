@@ -1,0 +1,28 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+
+  vars:
+    # Everything below is skipped in CI for one of two reasons: it pulls a large
+    # toolchain over the network (slow, non-deterministic), or it needs a real
+    # systemd/VM that a container cannot provide. The parts that CI *does* cover
+    # are the ones that encode host policy and have already shipped real bugs.
+    hermes_install_agent: false
+    devtools_install_node: false
+    devtools_install_uv: false
+    devtools_install_terraform: false
+    devtools_install_gh: false
+    devtools_install_azure_cli: false
+    devtools_install_browsers: false
+    devtools_install_claude_code: false
+    # Containers share the host kernel's swap; swapon inside one is not
+    # meaningful and fails on a tmpfs /.
+    base_swap_enabled: false
+    base_install_qemu_guest_agent: false
+
+  roles:
+    - base
+    - user
+    - ssh_hardening
+    - docker

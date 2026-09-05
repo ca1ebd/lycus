@@ -1,0 +1,5 @@
+---
+# Debian and Ubuntu ship the unit as ssh.service with no sshd alias; RHEL-family
+# calls it sshd. Hardcoding either breaks the other — this was a real bug caught
+# by molecule, and it would have failed on the production target too.
+hermes_sshd_service: "{{ 'ssh' if ansible_os_family == 'Debian' else 'sshd' }}"

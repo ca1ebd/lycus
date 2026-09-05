@@ -1,0 +1,124 @@
+---
+# Covers everything the role does with hermes_install_agent=false: the user,
+# its keys and sudo rights, and the three sshd directives. The installer itself
+# is deliberately out of scope here — see converge.yml.
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Read the hermes user from passwd
+      ansible.builtin.getent:
+        database: passwd
+        key: hermes
+      register: hermes_passwd
+
+    - name: Assert the hermes user exists with the expected shell
+      ansible.builtin.assert:
+        that:
+          - hermes_passwd.ansible_facts.getent_passwd.hermes is defined
+          - hermes_passwd.ansible_facts.getent_passwd.hermes[5] == "/bin/bash"
+        fail_msg: "hermes user missing, or its login shell is not /bin/bash"
+
+    - name: Read the sudo group
+      ansible.builtin.getent:
+        database: group
+        key: sudo
+      register: sudo_group
+
+    - name: Assert hermes is in the sudo group
+      ansible.builtin.assert:
+        that: "'hermes' in sudo_group.ansible_facts.getent_group.sudo[2]"
+        fail_msg: "hermes is not a member of the sudo group"
+
+    - name: Read the shadow entry for hermes
+      ansible.builtin.command: getent shadow hermes
+      register: hermes_shadow
+      changed_when: false
+
+    - name: Assert the hermes password is locked
+      ansible.builtin.assert:
+        that: hermes_shadow.stdout.split(':')[1].startswith('!')
+        fail_msg: "hermes password is not locked — SSH key should be the only login path"
+
+    - name: Read authorized_keys
+      ansible.builtin.slurp:
+        src: /home/hermes/.ssh/authorized_keys
+      register: authorized_keys
+
+    - name: Assert both public keys are authorized
+      ansible.builtin.assert:
+        that:
+          - "'cdqt98@gmail.com' in (authorized_keys.content | b64decode)"
+          - "'Termius' in (authorized_keys.content | b64decode)"
+        fail_msg: "expected both the primary and Termius keys in authorized_keys"
+
+    - name: Read the sudoers drop-in
+      ansible.builtin.slurp:
+        src: /etc/sudoers.d/hermes
+      register: sudoers_dropin
+
+    - name: Assert passwordless sudo is granted
+      ansible.builtin.assert:
+        that: "'hermes ALL=(ALL) NOPASSWD:ALL' in (sudoers_dropin.content | b64decode)"
+        fail_msg: "sudoers drop-in does not grant hermes passwordless sudo"
+
+    - name: Read sshd_config
+      ansible.builtin.slurp:
+        src: /etc/ssh/sshd_config
+      register: sshd_config
+
+    - name: Assert sshd is hardened
+      ansible.builtin.assert:
+        that:
+          - "'PasswordAuthentication no' in (sshd_config.content | b64decode)"
+          - "'PermitRootLogin no' in (sshd_config.content | b64decode)"
+          - "'PubkeyAuthentication yes' in (sshd_config.content | b64decode)"
+        fail_msg: "sshd_config is missing one or more expected hardening directives"
+
+    - name: Assert sshd accepts the resulting config
+      ansible.builtin.command: sshd -t
+      changed_when: false
+
+    - name: Read the docker group
+      ansible.builtin.getent:
+        database: group
+        key: docker
+      register: docker_group
+
+    - name: Assert hermes can use docker without sudo
+      ansible.builtin.assert:
+        that: "'hermes' in docker_group.ansible_facts.getent_group.docker[2]"
+        fail_msg: "hermes is not a member of the docker group"
+
+    - name: Stat the user environment file
+      ansible.builtin.stat:
+        path: /home/hermes/.config/hermes-env
+      register: env_file
+
+    - name: Assert the environment file is private to the user
+      ansible.builtin.assert:
+        that:
+          - env_file.stat.exists
+          - env_file.stat.mode == '0600'
+          - env_file.stat.pw_name == 'hermes'
+        fail_msg: >-
+          ~/.config/hermes-env must exist and be 0600 owned by hermes — it holds
+          secrets that must not sit in a world-readable dotfile.
+
+    - name: Read .bashrc
+      ansible.builtin.slurp:
+        src: /home/hermes/.bashrc
+      register: bashrc
+
+    - name: Assert .bashrc sources the env file rather than inlining secrets
+      ansible.builtin.assert:
+        that:
+          - "'.config/hermes-env' in (bashrc.content | b64decode)"
+          - "'GITHUB_PAT=' not in (bashrc.content | b64decode)"
+        fail_msg: "secrets must be sourced from the 0600 env file, never inlined in .bashrc"
+
+    - name: Assert unattended upgrades will not reboot the host
+      ansible.builtin.command: grep -q 'Unattended-Upgrade::Automatic-Reboot "false";' /etc/apt/apt.conf.d/50unattended-upgrades
+      changed_when: false

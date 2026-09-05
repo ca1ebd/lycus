@@ -1,0 +1,58 @@
+---
+# install.sh offers to install the systemd unit only behind an interactive
+# prompt, and bails out earlier at `if ! (: </dev/tty)` with "Gateway setup
+# skipped (no terminal available)". Ansible never has a TTY, so the unit is
+# never created and we invoke the CLI's own installer explicitly.
+#
+# Run as root, which gives a *system* unit at /etc/systemd/system with
+# User=hermes — the agent process itself never has root.
+- name: Check whether the gateway unit already exists
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ hermes_gateway_service_name }}.service"
+  register: hermes_gateway_unit
+
+- name: Install the gateway systemd service
+  ansible.builtin.command:
+    cmd: "{{ hermes_command_path }} gateway install"
+  environment:
+    HERMES_HOME: "{{ hermes_home }}"
+  become: true
+  when: not hermes_gateway_unit.stat.exists
+  changed_when: true
+  register: hermes_gateway_install
+
+- name: Confirm the unit was created
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ hermes_gateway_service_name }}.service"
+  register: hermes_gateway_unit_post
+  failed_when: not hermes_gateway_unit_post.stat.exists
+
+- name: Read the unit's User directive
+  ansible.builtin.command: "systemctl show {{ hermes_gateway_service_name }}.service -p User --value"
+  become: true
+  changed_when: false
+  register: hermes_gateway_user
+
+# Guards the whole point of this design: root installs the code, hermes runs it.
+- name: Assert the gateway runs as the hermes user, not root
+  ansible.builtin.assert:
+    that: hermes_gateway_user.stdout | trim == hermes_user
+    fail_msg: >-
+      {{ hermes_gateway_service_name }} is set to run as
+      '{{ hermes_gateway_user.stdout | trim }}', expected '{{ hermes_user }}'.
+      The agent must never run as root.
+
+- name: Enable the gateway service
+  ansible.builtin.systemd_service:
+    name: "{{ hermes_gateway_service_name }}"
+    enabled: true
+    daemon_reload: true
+  become: true
+
+# Deliberately not started unless asked: see hermes_gateway_started in defaults.
+- name: Start the gateway service
+  ansible.builtin.systemd_service:
+    name: "{{ hermes_gateway_service_name }}"
+    state: started
+  become: true
+  when: hermes_gateway_started | bool

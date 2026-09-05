@@ -1,0 +1,63 @@
+---
+# install.sh resolves its layout from the effective uid, not from a flag:
+#   root on Linux -> /usr/local/lib/hermes-agent, command in /usr/local/bin
+#   non-root      -> $HERMES_HOME/hermes-agent,   command in ~/.local/bin
+# We want the first. Running this with become_user: hermes would silently
+# produce the second — a working but divergent install. HERMES_HOME still points
+# into the user's home so the agent owns its own data.
+- name: Ensure the agent data directory exists
+  ansible.builtin.file:
+    path: "{{ hermes_home }}"
+    state: directory
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_user }}"
+    mode: "0700"
+  become: true
+
+- name: Check whether Hermes is already installed
+  ansible.builtin.stat:
+    path: "{{ hermes_command_path }}"
+  register: hermes_bin
+
+- name: Download the Hermes install script
+  ansible.builtin.get_url:
+    url: "{{ hermes_install_script }}"
+    dest: /tmp/hermes-install.sh
+    mode: "0755"
+  become: true
+  when: not hermes_bin.stat.exists
+
+- name: Run the Hermes install script as root
+  ansible.builtin.command:
+    cmd: bash /tmp/hermes-install.sh
+  environment:
+    HERMES_HOME: "{{ hermes_home }}"
+  become: true
+  when: not hermes_bin.stat.exists
+  changed_when: true
+
+- name: Remove the install script
+  ansible.builtin.file:
+    path: /tmp/hermes-install.sh
+    state: absent
+  become: true
+
+- name: Verify the expected FHS layout
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ hermes_command_path }}"
+    - "{{ hermes_install_dir }}"
+  register: hermes_layout
+  failed_when: not hermes_layout.stat.exists
+
+# The installer runs as root, so anything it creates under HERMES_HOME lands
+# root-owned. The agent runs as hermes and must own its own state.
+- name: Ensure the agent owns its data directory
+  ansible.builtin.file:
+    path: "{{ hermes_home }}"
+    state: directory
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_user }}"
+    recurse: true
+  become: true

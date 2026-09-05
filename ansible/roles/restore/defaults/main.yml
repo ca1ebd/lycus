@@ -1,0 +1,12 @@
+---
+# Path on the CONTROL machine to the tarball produced by backup/capture.sh.
+# Empty means the restore role does nothing, which is the default: a fresh
+# provision should be proven clean before state is laid on top of it.
+restore_archive: ""
+
+# Repos with no git remote, captured separately — see backup/README.md.
+restore_repos_archive: ""
+restore_repos_dest: "/home/{{ hermes_user }}/Development/claude"
+
+# Refuse to overwrite existing agent state unless explicitly allowed.
+restore_force: false

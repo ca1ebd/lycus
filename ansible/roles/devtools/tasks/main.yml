@@ -1,0 +1,36 @@
+---
+- name: Install build and CLI packages
+  ansible.builtin.apt:
+    name: "{{ devtools_build_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: Import Node tasks
+  ansible.builtin.import_tasks: node.yml
+  when: devtools_install_node | bool
+
+- name: Import uv tasks
+  ansible.builtin.import_tasks: uv.yml
+  when: devtools_install_uv | bool
+
+- name: Import Terraform tasks
+  ansible.builtin.import_tasks: terraform.yml
+  when: devtools_install_terraform | bool
+
+- name: Import GitHub CLI tasks
+  ansible.builtin.import_tasks: gh.yml
+  when: devtools_install_gh | bool
+
+- name: Import Azure CLI tasks
+  ansible.builtin.import_tasks: azure_cli.yml
+  when: devtools_install_azure_cli | bool
+
+- name: Import browser tasks
+  ansible.builtin.import_tasks: browsers.yml
+  when: devtools_install_browsers | bool
+
+- name: Import Claude Code tasks
+  ansible.builtin.import_tasks: claude_code.yml
+  when: devtools_install_claude_code | bool

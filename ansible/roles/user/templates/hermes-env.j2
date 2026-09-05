@@ -1,0 +1,5 @@
+# Managed by lycus (ansible/roles/user). Do not edit by hand.
+# Sourced from ~/.bashrc. Mode 0600 — secrets belong here, not in .bashrc.
+{% for key, value in hermes_user_env.items() %}
+export {{ key }}={{ value | quote }}
+{% endfor %}

@@ -1,0 +1,5 @@
+---
+# Non-secret defaults shared by every target. Secrets belong in vault.yml,
+# encrypted with ansible-vault — see vault.yml.example.
+hermes_user: hermes
+hermes_home: "/home/{{ hermes_user }}/.hermes"

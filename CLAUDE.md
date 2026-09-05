@@ -1,50 +1,68 @@
 # lycus
 
-Ansible automation to provision Ubuntu VMs with Hermes Agent (NousResearch).
+Terraform + Ansible to build a Hermes Agent host. Read `SPEC.md` for what the
+machine is, `AUTOMATION.md` for how it is built, and `adr/adr.md` for why.
 
 ## Repo
-`ca1ebd/lycus` — SSH key auth. Feature branches only, never push to main. Git CLI for git ops; GitHub MCP for repo/PR/issue management.
+`ca1ebd/lycus` — public, SSH key auth. Feature branches only, never push to main.
+Git CLI for git operations; GitHub MCP for repo/PR/issue management.
+
+**No attribution in commits or PRs.** No `Co-Authored-By`, no session links, no
+"Generated with Claude Code". Besides being the standing preference, this repo's
+`main` ruleset sets `require_extra_approval_for_unattributed_changes`, so a
+co-author email that maps to no GitHub account blocks the merge.
 
 ## Structure
 
 ```
 lycus/
-├── .github/workflows/ci.yml           # runs molecule on PRs; comments the output back on failure
-├── requirements.txt                   # ansible + molecule, for CI and local runs
-├── docs/swap-setup-spec.md            # swap sizing/swappiness spec — not yet implemented as tasks
-├── inventory/hosts.yml                # hermes_servers group — fill in VM IPs before running
-├── playbooks/hermes.yml               # entry point: hosts=hermes_servers, become=true, role=hermes
-└── roles/hermes/
-    ├── defaults/main.yml              # all tuneable vars (user, shell, groups, SSH keys, install URL, toggles)
-    ├── molecule/default/              # docker-based scenario: converge, verify, idempotence
-    └── tasks/
-        ├── main.yml                   # imports: user → ssh_hardening → install (install gated by a flag)
-        ├── user.yml                   # prereq packages, hermes user/group, locked password, SSH keys, sudoers NOPASSWD
-        ├── ssh_hardening.yml          # sshd_config directives, validates with sshd -t, restarts only on change
-        └── install.yml                # runs official install.sh, patches PATH in .bashrc/.profile
+├── terraform/{proxmox,digitalocean}/   # one root module per target, same output contract
+├── ansible/
+│   ├── site.yml                        # base -> user -> ssh_hardening -> docker -> devtools -> hermes -> restore
+│   ├── molecule/default/               # container scenario run by CI
+│   └── roles/
+│       ├── base/                       # packages, swap, timezone, unattended-upgrades, guest agent
+│       ├── user/                       # hermes user, keys, sudo, 0600 secrets file
+│       ├── ssh_hardening/              # sshd_config, validated before restart
+│       ├── docker/                     # engine + group membership
+│       ├── devtools/                   # node, uv, terraform, gh, az, playwright, claude code
+│       ├── hermes/                     # agent install + gateway systemd unit
+│       └── restore/                    # rehydrate captured state (tagged `never`)
+├── backup/capture.sh                   # capture state from a running host
+└── adr/
 ```
 
-## Key design decisions
+## Things that look like bugs and are not
 
-- **Dedicated `hermes` user**: all Hermes Agent activity runs under this user, not the bootstrap user.
-- **Password locked**: `password_lock: true` + `PasswordAuthentication no` — SSH key is the only login path.
-- **Passwordless sudo**: `NOPASSWD:ALL` in `/etc/sudoers.d/hermes` — no password to enter anyway.
-- **Idempotent install**: checks for `~/.local/bin/hermes` before running the install script.
-- **SSH keys in defaults**: `hermes_ssh_public_keys` list in `defaults/main.yml` — add keys there.
-- **No handler for sshd**: each `sshd_config` edit registers its result and the restart is conditional on
-  them, so a converged host doesn't bounce sshd on every run. The config is validated with `sshd -t`
-  before the restart, so a bad edit fails the play instead of locking you out.
-- **The sshd unit name is resolved from facts**: Debian and Ubuntu ship `ssh.service` with *no* `sshd`
-  alias, RHEL-family ships `sshd`. Hardcoding either one breaks the other — see `hermes_sshd_service`.
-- **`hermes_install_agent`**: set false to provision the user, hardening and sudoers without running the
-  installer. Molecule uses this — the installer pulls a full Python/Node toolchain over the network,
-  which makes CI slow and non-deterministic.
+- **The Hermes installer runs as root.** It picks its layout from the effective
+  uid, not a flag. As root: `/usr/local/lib/hermes-agent` + `/usr/local/bin/hermes`.
+  As any other user: `~/.hermes/hermes-agent` + `~/.local/bin`. Changing this to
+  `become_user: hermes` looks safer and just builds a different machine — the
+  agent already runs unprivileged via the unit's `User=`. See adr/0002.
+- **`hermes gateway install` is called explicitly.** `install.sh` offers to do it
+  only behind an interactive prompt and bails at `if ! (: </dev/tty)`. Ansible
+  never has a TTY, so the offer is unreachable.
+- **The gateway is enabled but not started.** Starting it is a cutover decision;
+  two gateways polling one bot token fight. Set `hermes_gateway_started: true`.
+- **`vm_agent_enabled` defaults true on Proxmox.** It controls whether the VirtIO
+  serial device exists at all, not just whether Terraform waits. With it false
+  the guest's `qemu-guest-agent` has nothing to bind and cannot start.
+  `vm_agent_timeout` bounds the wait instead. The device only appears after a
+  full power cycle — stop/start, not reboot.
+- **`acl` is in `base_packages`.** Required for any `become_user` to a non-root
+  user: Ansible grants the target user access to its 0600 temp file with
+  `setfacl` rather than world-reading it. Without it, every such task fails.
+- **`user` role sets `append: true`.** The `docker` role adds the user to
+  `docker`; without append the default replaces group membership and the two
+  roles fight on every run.
+- **No apt chromium.** On 24.04 that package is a stub for the snap, which drags
+  in `cups`. The agent uses Playwright's own browsers. See adr/0003.
 
 ## Testing
 
 ```bash
-pip install -r requirements.txt
-cd roles/hermes && molecule test
+cd ansible && molecule test
 ```
 
-Runs converge, an idempotence pass, and `verify.yml` against an Ubuntu 24.04 container.
+CI runs this per PR. The scenario skips network-heavy installers and covers the
+host policy — which is where every real bug found so far has been.

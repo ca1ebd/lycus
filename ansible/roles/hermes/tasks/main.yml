@@ -1,0 +1,10 @@
+---
+- name: Import Hermes install tasks
+  ansible.builtin.import_tasks: install.yml
+  when: hermes_install_agent | bool
+
+- name: Import gateway service tasks
+  ansible.builtin.import_tasks: gateway.yml
+  when:
+    - hermes_install_agent | bool
+    - hermes_gateway_service | bool

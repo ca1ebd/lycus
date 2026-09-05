@@ -1,0 +1,32 @@
+---
+hermes_user: hermes
+
+hermes_install_script: "https://hermes-agent.nousresearch.com/install.sh"
+
+# Set false to provision everything else without running the Hermes installer.
+# Molecule uses this: the installer pulls a full Python/Node toolchain over the
+# network, which makes CI slow and non-deterministic.
+hermes_install_agent: true
+
+# Where install.sh puts things when it runs as root on Linux. It picks this
+# "FHS layout" from the effective uid, NOT from a flag — running it as the
+# hermes user instead silently produces ~/.hermes/hermes-agent with the command
+# in ~/.local/bin, which is a different install from production.
+hermes_install_dir: /usr/local/lib/hermes-agent
+hermes_command_path: /usr/local/bin/hermes
+
+# Agent data (config, state.db, memories, skills). Deliberately in the user's
+# home rather than root's, so the agent running as hermes owns its own state.
+hermes_home: "/home/{{ hermes_user }}/.hermes"
+
+# Install and enable the gateway service. install.sh only offers this behind an
+# interactive prompt and short-circuits on `if ! (: </dev/tty)`, so under Ansible
+# it never runs — the role has to invoke `hermes gateway install` itself.
+hermes_gateway_service: true
+hermes_gateway_service_name: hermes-gateway
+
+# Enabled but NOT started by default. A fresh box has no credentials yet, and
+# during migration the old host still owns the Telegram bot token — two gateways
+# polling one token fight over updates. Starting is a cutover step, after
+# restore has put the config in place.
+hermes_gateway_started: false
