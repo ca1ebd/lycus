@@ -65,6 +65,10 @@ AGENT_PATHS=(
   ".hermes/cron"
   ".hermes/kanban.db"
   ".hermes/channel_directory.json"
+  # Paired user identities. Without this the gateway starts, connects, and then
+  # refuses its own owner with "I don't recognize you yet" plus a fresh pairing
+  # code — the migration looks successful right up until someone messages it.
+  ".hermes/pairing"
   ".hermes/SOUL.md"
   ".ssh"
   ".claude"
