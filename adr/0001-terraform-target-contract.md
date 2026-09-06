@@ -43,7 +43,7 @@ targets genuinely disagree: Proxmox's cloud-init creates an unprivileged
 
 Two Terraform states now touch the same Proxmox node — this one and the homelab
 repository's. They share no resources, so this is fine, but it is a real
-constraint: the cloud image filename is namespaced (`lycus-noble-...`) because
+constraint: the cloud image filename is namespaced (`lycus-resolute-...`) because
 two states writing the same filename into the same datastore would fight over it.
 
 ## Consequences

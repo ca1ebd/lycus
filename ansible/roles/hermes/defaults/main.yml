@@ -29,7 +29,13 @@ hermes_home: "/home/{{ hermes_user }}/.hermes"
 # CPU before this was pinned down.
 #
 # So do not rely on the TTY check. Ask for non-interactive explicitly.
-hermes_install_args: "--non-interactive --skip-setup"
+#
+# --skip-browser because the devtools role already installed Playwright's
+# browsers as the hermes user, into ~hermes/.cache/ms-playwright. The installer
+# runs as root, so its own `npx playwright install --with-deps` would download a
+# second copy into /root/.cache/ms-playwright that the agent — running as hermes
+# — can never read. Several minutes and a few hundred MB for nothing.
+hermes_install_args: "--non-interactive --skip-setup --skip-browser"
 
 # Install and enable the gateway service. With --non-interactive the installer
 # never offers to do this, so the role invokes `hermes gateway install` itself.

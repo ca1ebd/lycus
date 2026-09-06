@@ -6,7 +6,7 @@ Two layers, deliberately separable:
 
 - **Terraform** creates the instance. One root module per target under
   `terraform/<target>/`, each satisfying the same output contract.
-- **Ansible** turns any reachable Ubuntu 24.04 host into a Lycus host. It does
+- **Ansible** turns any reachable Ubuntu 26.04 host into a Lycus host. It does
   not know or care which target produced it.
 
 That split is the point. Lycus is a standalone project that happens to be
@@ -139,18 +139,32 @@ unit's `User=`, and the change would quietly build a different machine. There is
 an assertion in `roles/hermes/tasks/gateway.yml` that fails the run if the unit
 is ever set to run as anyone but `hermes`.
 
-### The installer will hang unless told not to be interactive
+### The installer needs its flags; the gateway unit is ours
 
-`install.sh` finishes by running its setup wizard, and separately offers to
-install the gateway unit. Both are guarded by `(: </dev/tty)`, which looks like
-it makes them safe to run unattended. It does not: **Ansible allocates a pseudo
-terminal for `become`**, so `/dev/tty` exists, the guard passes, and the wizard
-sits waiting on input forever — observed hanging for over ten minutes at 0% CPU.
+`install.sh` is genuinely built for unattended use — it detects `curl | bash`
+and takes `--non-interactive`, `--skip-setup` and `--skip-browser`. Pass those
+and it runs clean. Without them it ends by launching an interactive setup wizard
+that blocks forever, because its `(: </dev/tty)` guard does not fire under
+Ansible (`become` allocates a pseudo terminal, so a controlling terminal exists).
+`--skip-browser` matters separately: the installer would otherwise run its own
+`npx playwright install --with-deps` as root, downloading a second copy of the
+browsers into `/root/.cache/ms-playwright` that the agent, running as `hermes`,
+can never read.
 
-The role therefore passes `--non-interactive --skip-setup` rather than trusting
-the guard, and creates the unit itself with `hermes gateway install`. Doing it
-explicitly is the more robust arrangement anyway: it does not depend on whether
-a TTY happened to be allocated.
+**The gateway unit is templated, not generated.** `hermes gateway install` works,
+but it asks "Start the gateway now after installing the service? [Y/n]:" and has
+no flag to suppress that. Under Ansible it either blocks or, once the terminal is
+removed, takes its default and starts the service — exactly what must not happen
+at provision time. Getting it to behave took `setsid`, a stdin redirect, and a
+compensating stop task: three mechanisms to dodge one question, for a unit whose
+every field is static.
+
+So `roles/hermes/templates/hermes-gateway.service.j2` holds it directly. That is
+declarative, idempotent, reviewable in a diff, and states the requirements
+(`User=hermes`, system scope, enabled but stopped) instead of asking a CLI to
+infer them. The trade is that upstream unit changes no longer arrive for free —
+diff the template against what `hermes gateway install --system` generates when
+upgrading Hermes.
 
 ### The gateway is enabled but not started
 

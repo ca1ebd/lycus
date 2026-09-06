@@ -6,12 +6,12 @@ Status: Accepted
 ## Context
 
 The agent needs a browser. The obvious instruction — "install chromium from
-apt" — does not do what it sounds like on Ubuntu 24.04.
+apt" — does not do what it sounds like on Ubuntu.
 
-`chromium-browser` there is version `2:1snap1-0ubuntu2`: a transitional stub
-whose only job is to install the snap. Ubuntu ships no real apt chromium. So
-"apt chromium" means "the snap", and the snap declares `cups` as a runtime
-dependency via a content interface.
+`chromium-browser` is a transitional stub whose only job is to install the snap
+— `2:1snap1-0ubuntu2` on 24.04, still `2:1snap1-0ubuntu4` on 26.04. Ubuntu ships
+no real apt chromium. So "apt chromium" means "the snap", and the snap declares
+`cups` as a runtime dependency via a content interface.
 
 On the original host that produced a full print server listening on
 `0.0.0.0:631` and `[::]:631` — on a machine with no printer, whose public

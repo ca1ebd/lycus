@@ -15,12 +15,59 @@
     state: present
   become: true
 
+# Without this pin the NodeSource repository is added and then silently loses.
+# Both it and Ubuntu's archive sit at apt priority 500, so apt just takes the
+# higher version — and from 26.04 on, Ubuntu's own nodejs (22.22.1 in
+# resolute/universe) outranks NodeSource's. Two things then go wrong quietly:
+# the host gets a different Node major than devtools_node_major asks for, and
+# Ubuntu's nodejs package does not bundle npm (it is split into a separate
+# package), so npm is simply absent. On 24.04 this worked only by luck —
+# Ubuntu shipped Node 18 there, which NodeSource's 20 happened to beat.
+#
+# Priority above 1000 is deliberate: it lets apt install NodeSource's build even
+# when the archive offers a higher version number.
+- name: Pin the NodeSource repository above the Ubuntu archive
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/nodesource.pref
+    mode: "0644"
+    content: |
+      Package: nodejs
+      Pin: origin deb.nodesource.com
+      Pin-Priority: 1001
+  become: true
+
+# state: latest, not present. `present` is satisfied by *any* nodejs, so on a
+# host where the distribution's package is already installed apt has no reason
+# to act and the pin above accomplishes nothing — the task reports ok and the
+# wrong Node stays. `latest` means "the pinned candidate", which is exactly what
+# we want. The cost is that a new NodeSource patch release shows up as a changed
+# task on a later run; that is the right trade for actually controlling which
+# Node is installed.
 - name: Install Node.js
   ansible.builtin.apt:
     name: nodejs
-    state: present
+    state: latest
     update_cache: true
   become: true
+
+# npm ships inside NodeSource's nodejs package. If the pin ever stops working we
+# would otherwise not find out until some later task needs npm and fails with a
+# confusing "executable not found".
+- name: Verify node and npm are both present and the expected major version
+  ansible.builtin.command: "{{ item }} --version"
+  loop:
+    - node
+    - npm
+  changed_when: false
+  register: devtools_node_versions
+
+- name: Assert the installed Node major matches what was requested
+  ansible.builtin.assert:
+    that: devtools_node_versions.results[0].stdout is match('v' ~ devtools_node_major ~ '\\.')
+    fail_msg: >-
+      Expected Node {{ devtools_node_major }}.x but found
+      {{ devtools_node_versions.results[0].stdout }} — the NodeSource pin is not
+      taking effect, so apt is preferring the distribution's own package.
 
 - name: Install global npm packages
   community.general.npm:

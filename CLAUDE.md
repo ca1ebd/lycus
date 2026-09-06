@@ -40,11 +40,16 @@ lycus/
   user: `~/.hermes/hermes-agent` + `~/.local/bin`. Changing this to
   `become_user: hermes` looks safer and just builds a different machine — the
   agent already runs unprivileged via the unit's `User=`. See adr/0002.
-- **`install.sh` gets `--non-interactive --skip-setup`.** Its setup wizard and
-  gateway offer are guarded by `(: </dev/tty)`, which is NOT enough under
-  Ansible: `become` allocates a pseudo terminal, so the guard passes and the
-  wizard blocks forever on input. The role calls `hermes gateway install`
-  itself instead of relying on the offer.
+- **`install.sh` gets `--non-interactive --skip-setup --skip-browser`.** It is
+  built for unattended use, but its `(: </dev/tty)` guard does not fire under
+  Ansible (`become` allocates a pty), so without the flags its setup wizard
+  blocks forever. `--skip-browser` avoids a second, unreadable copy of the
+  Playwright browsers under `/root`.
+- **The gateway unit is templated, never generated.** `hermes gateway install`
+  prompts to start the service with no flag to suppress it, and its default is
+  yes. Do not reintroduce it — the unit is static, and
+  `templates/hermes-gateway.service.j2` says what we actually want. Diff the
+  template against upstream's generated unit when upgrading Hermes.
 - **The gateway is enabled but not started.** Starting it is a cutover decision;
   two gateways polling one bot token fight. Set `hermes_gateway_started: true`.
 - **`vm_agent_enabled` defaults true on Proxmox.** It controls whether the VirtIO
@@ -58,7 +63,7 @@ lycus/
 - **`user` role sets `append: true`.** The `docker` role adds the user to
   `docker`; without append the default replaces group membership and the two
   roles fight on every run.
-- **No apt chromium.** On 24.04 that package is a stub for the snap, which drags
+- **No apt chromium.** That package is a stub for the snap (still so on 26.04), which drags
   in `cups`. The agent uses Playwright's own browsers. See adr/0003.
 
 ## Testing

@@ -100,9 +100,13 @@ variable "ssh_private_key_path" {
 }
 
 variable "cloud_image_url" {
-  description = "Ubuntu cloud image to import."
+  description = <<-EOT
+    Ubuntu cloud image to import. 26.04 LTS ("resolute"), the current LTS.
+    The Ansible roles target this release: apt repository names and the 24.04
+    t64 package names both carry forward, so 24.04 also works if pinned back.
+  EOT
   type        = string
-  default     = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+  default     = "https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-amd64.img"
 }
 
 variable "cloud_image_file_name" {
@@ -113,7 +117,7 @@ variable "cloud_image_file_name" {
     against the same node.
   EOT
   type        = string
-  default     = "lycus-noble-server-cloudimg-amd64.qcow2"
+  default     = "lycus-resolute-server-cloudimg-amd64.qcow2"
 }
 
 variable "vm_agent_enabled" {

@@ -5,7 +5,7 @@ from NousResearch — the instance, the agent, its messaging gateway, and enough
 developer tooling for the agent to do real work.
 
 Two layers, deliberately separable. **Terraform** creates the instance, one root
-module per target. **Ansible** turns any reachable Ubuntu 24.04 host into a
+module per target. **Ansible** turns any reachable Ubuntu 26.04 host into a
 Lycus host and neither knows nor cares which target produced it.
 
 ```
@@ -54,7 +54,7 @@ see [AUTOMATION.md](AUTOMATION.md#three-things-about-this-that-are-not-obvious).
 
 ## What you get
 
-An Ubuntu 24.04 host running Hermes Agent as an unprivileged `hermes` user, with
+An Ubuntu 26.04 host running Hermes Agent as an unprivileged `hermes` user, with
 Docker, Node.js, uv, Terraform, the GitHub and Azure CLIs, Claude Code, and
 Playwright-driven browsers. Hardened sshd, a swap file sized to survive OOM
 pressure, and secrets kept out of dotfiles.

@@ -14,3 +14,4 @@ secrets/
 
 # Ansible vault (only the .example is committed)
 ansible/group_vars/all/vault.yml
+**/.terraform.tfstate.lock.info

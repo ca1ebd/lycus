@@ -1,32 +1,28 @@
 ---
-# install.sh offers to install the systemd unit only behind an interactive
-# prompt, and we run it with --non-interactive, so the offer never happens.
-# Invoking the CLI's installer ourselves is also the more robust arrangement:
-# it does not depend on whether a TTY happened to be present, which under
-# Ansible is not the "never" it looks like — see hermes_install_args.
+# The unit is templated rather than produced by `hermes gateway install`.
 #
-# Run as root, which gives a *system* unit at /etc/systemd/system with
-# User=hermes — the agent process itself never has root.
-- name: Check whether the gateway unit already exists
-  ansible.builtin.stat:
-    path: "/etc/systemd/system/{{ hermes_gateway_service_name }}.service"
-  register: hermes_gateway_unit
-
-- name: Install the gateway systemd service
-  ansible.builtin.command:
-    cmd: "{{ hermes_command_path }} gateway install"
-  environment:
-    HERMES_HOME: "{{ hermes_home }}"
+# That command exists and works, but it is interactive: it asks "Start the
+# gateway now after installing the service? [Y/n]:" and there is no flag to
+# suppress it. Under Ansible that either blocks forever or, once the terminal is
+# taken away, takes its default and *starts* the service — which is precisely
+# what this role must not do at provision time. Working around it needed setsid
+# plus a stdin redirect plus a compensating stop task: three mechanisms to avoid
+# one question, for a unit whose every field is static.
+#
+# Templating states our actual requirements directly, is idempotent, and the
+# file is reviewable in git.
+- name: Install the gateway systemd unit
+  ansible.builtin.template:
+    src: hermes-gateway.service.j2
+    dest: "/etc/systemd/system/{{ hermes_gateway_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
   become: true
-  when: not hermes_gateway_unit.stat.exists
-  changed_when: true
-  register: hermes_gateway_install
+  notify: Reload systemd
 
-- name: Confirm the unit was created
-  ansible.builtin.stat:
-    path: "/etc/systemd/system/{{ hermes_gateway_service_name }}.service"
-  register: hermes_gateway_unit_post
-  failed_when: not hermes_gateway_unit_post.stat.exists
+- name: Apply any pending unit changes before acting on the service
+  ansible.builtin.meta: flush_handlers
 
 - name: Read the unit's User directive
   ansible.builtin.command: "systemctl show {{ hermes_gateway_service_name }}.service -p User --value"
@@ -43,17 +39,18 @@
       '{{ hermes_gateway_user.stdout | trim }}', expected '{{ hermes_user }}'.
       The agent must never run as root.
 
+# Enabled so it survives a reboot, but not started: a freshly provisioned host
+# has no credentials, and during a migration the old host still owns the bot
+# token — two gateways polling one token fight over updates. Starting is a
+# cutover step.
 - name: Enable the gateway service
   ansible.builtin.systemd_service:
     name: "{{ hermes_gateway_service_name }}"
     enabled: true
-    daemon_reload: true
   become: true
 
-# Deliberately not started unless asked: see hermes_gateway_started in defaults.
 - name: Start the gateway service
   ansible.builtin.systemd_service:
     name: "{{ hermes_gateway_service_name }}"
-    state: started
+    state: "{{ 'started' if hermes_gateway_started | bool else 'stopped' }}"
   become: true
-  when: hermes_gateway_started | bool

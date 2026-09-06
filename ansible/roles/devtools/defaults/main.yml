@@ -1,5 +1,7 @@
 ---
-devtools_node_major: 20
+# 22 is the current Node LTS and what 26.04 ships; 20 reaches end of life in
+# 2026. Whatever this says, the pin in node.yml makes it actually take effect.
+devtools_node_major: 22
 devtools_terraform_version: "1.9.8"
 
 devtools_install_node: true

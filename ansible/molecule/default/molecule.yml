@@ -11,7 +11,7 @@ driver:
 
 platforms:
   - name: instance
-    image: geerlingguy/docker-ubuntu2404-ansible:latest
+    image: geerlingguy/docker-ubuntu2604-ansible:latest
     command: ""
     cgroupns_mode: host
     volumes:

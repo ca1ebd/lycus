@@ -36,6 +36,18 @@
     group: "{{ hermes_user }}"
   become: true
 
+# On a freshly provisioned host this does not exist yet, and unarchive will not
+# create its destination.
+- name: Ensure the workspace directory exists
+  ansible.builtin.file:
+    path: "{{ restore_repos_dest }}"
+    state: directory
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_user }}"
+    mode: "0755"
+  become: true
+  when: restore_repos_archive | length > 0
+
 - name: Restore repositories with no remote
   ansible.builtin.unarchive:
     src: "{{ restore_repos_archive }}"

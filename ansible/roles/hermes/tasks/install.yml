@@ -30,9 +30,14 @@
 # hermes_install_args carries --non-interactive --skip-setup. Without them the
 # installer's setup wizard blocks forever: Ansible gives the task a pseudo
 # terminal, so the installer's own "no terminal available" guard does not fire.
+# install.sh is genuinely built for unattended use — it detects `curl | bash`
+# and takes --non-interactive/--skip-* flags — so its own flags are enough here
+# and no terminal trickery is needed. See hermes_install_args for what each
+# flag is for.
 - name: Run the Hermes install script as root
   ansible.builtin.command:
     cmd: "bash /tmp/hermes-install.sh {{ hermes_install_args }}"
+
   environment:
     HERMES_HOME: "{{ hermes_home }}"
   become: true

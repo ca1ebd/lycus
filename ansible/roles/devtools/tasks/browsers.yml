@@ -1,8 +1,9 @@
 ---
 # Deliberately NOT installing chromium from apt.
 #
-# On Ubuntu 24.04 the `chromium-browser` package is a transitional stub whose
-# only job is to install the snap (version 2:1snap1-0ubuntu2). That snap pulls
+# The `chromium-browser` package is a transitional stub whose only job is to
+# install the snap — 2:1snap1-0ubuntu2 on 24.04, 2:1snap1-0ubuntu4 on 26.04, and
+# Ubuntu ships no real apt chromium either way. That snap pulls
 # in `cups` as a runtime dependency, which on the production host meant a print
 # server listening on 0.0.0.0:631 — on a box with no printer and a public IP.
 #

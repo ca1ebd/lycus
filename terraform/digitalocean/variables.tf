@@ -22,9 +22,15 @@ variable "droplet_size" {
 }
 
 variable "image" {
-  description = "Base image. Must match what the Ansible roles target."
+  description = <<-EOT
+    Base image. Must match what the Ansible roles target (26.04 LTS).
+    Unverified against a live account: the DigitalOcean token on hand no longer
+    authenticates, so this slug follows DO's naming convention rather than a
+    confirmed listing. Check `doctl compute image list-distribution` before the
+    first apply.
+  EOT
   type        = string
-  default     = "ubuntu-24-04-x64"
+  default     = "ubuntu-26-04-x64"
 }
 
 variable "ssh_key_names" {

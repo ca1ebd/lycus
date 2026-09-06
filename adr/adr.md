@@ -11,3 +11,4 @@ tradeoffs, not the configuration itself. `SPEC.md` describes the machine and
 | [0003](0003-playwright-browsers-not-apt-chromium.md) | Playwright's own browsers, never apt chromium |
 | [0004](0004-secrets-out-of-bashrc.md) | Secrets in a 0600 file, not in `.bashrc` |
 | [0005](0005-rebuild-config-restore-state.md) | Rebuild configuration, restore only state |
+| [0006](0006-nodesource-with-an-apt-pin.md) | Node from NodeSource, with an apt pin that actually binds |

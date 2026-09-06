@@ -14,8 +14,12 @@ rebuildable from scratch.
 
 ## Operating system
 
-Ubuntu 24.04 LTS. The Ansible roles assume Debian-family package names and apt
-repositories throughout.
+Ubuntu 26.04 LTS ("resolute"), the current LTS. The Ansible roles assume
+Debian-family package names and apt repositories throughout.
+
+24.04 also works if pinned back: every third-party repository used here
+publishes for both, and the `t64` package names introduced by 24.04's 64-bit
+`time_t` transition carry forward unchanged.
 
 ## Users and access
 
@@ -66,7 +70,10 @@ Two things about the installer are load-bearing and easy to get wrong:
    `--non-interactive --skip-setup`, and the unit is created by calling
    `hermes gateway install` explicitly.
 
-The gateway is **enabled but not started** by a normal provision run. Starting it
+The gateway is **enabled but not started** by a normal provision run. This takes
+active effort: `hermes gateway install --system` starts the service as a side
+effect of installing it, so the role stops it again unless starting was asked
+for. Starting it
 is a cutover step: a fresh host has no credentials, and during a migration the
 old host still owns the bot token — two gateways polling one token fight over
 updates.
@@ -85,9 +92,9 @@ added after exactly that incident. See `docs/swap-setup-spec.md`.
 The agent drives **Playwright's own downloaded browsers** under
 `~/.cache/ms-playwright`. Chromium is *not* installed from apt.
 
-On Ubuntu 24.04 the `chromium-browser` package is a transitional stub whose only
-job is to install the snap, and that snap pulls in `cups` as a runtime
-dependency — which on the original host meant a print server listening on
+The `chromium-browser` package is a transitional stub whose only job is to
+install the snap — still true as of 26.04 — and that snap pulls in `cups` as a
+runtime dependency — which on the original host meant a print server listening on
 `0.0.0.0:631`, on a box with no printer and a public IP. What apt legitimately
 provides is the system library and font layer those browsers link against.
 
