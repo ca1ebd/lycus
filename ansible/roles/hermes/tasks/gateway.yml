@@ -1,0 +1,56 @@
+---
+# The unit is templated rather than produced by `hermes gateway install`.
+#
+# That command exists and works, but it is interactive: it asks "Start the
+# gateway now after installing the service? [Y/n]:" and there is no flag to
+# suppress it. Under Ansible that either blocks forever or, once the terminal is
+# taken away, takes its default and *starts* the service — which is precisely
+# what this role must not do at provision time. Working around it needed setsid
+# plus a stdin redirect plus a compensating stop task: three mechanisms to avoid
+# one question, for a unit whose every field is static.
+#
+# Templating states our actual requirements directly, is idempotent, and the
+# file is reviewable in git.
+- name: Install the gateway systemd unit
+  ansible.builtin.template:
+    src: hermes-gateway.service.j2
+    dest: "/etc/systemd/system/{{ hermes_gateway_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+
+- name: Apply any pending unit changes before acting on the service
+  ansible.builtin.meta: flush_handlers
+
+- name: Read the unit's User directive
+  ansible.builtin.command: "systemctl show {{ hermes_gateway_service_name }}.service -p User --value"
+  become: true
+  changed_when: false
+  register: hermes_gateway_user
+
+# Guards the whole point of this design: root installs the code, hermes runs it.
+- name: Assert the gateway runs as the hermes user, not root
+  ansible.builtin.assert:
+    that: hermes_gateway_user.stdout | trim == hermes_user
+    fail_msg: >-
+      {{ hermes_gateway_service_name }} is set to run as
+      '{{ hermes_gateway_user.stdout | trim }}', expected '{{ hermes_user }}'.
+      The agent must never run as root.
+
+# Enabled so it survives a reboot, but not started: a freshly provisioned host
+# has no credentials, and during a migration the old host still owns the bot
+# token — two gateways polling one token fight over updates. Starting is a
+# cutover step.
+- name: Enable the gateway service
+  ansible.builtin.systemd_service:
+    name: "{{ hermes_gateway_service_name }}"
+    enabled: true
+  become: true
+
+- name: Start the gateway service
+  ansible.builtin.systemd_service:
+    name: "{{ hermes_gateway_service_name }}"
+    state: "{{ 'started' if hermes_gateway_started | bool else 'stopped' }}"
+  become: true

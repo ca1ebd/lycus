@@ -1,59 +1,73 @@
 # lycus
 
-Ansible automation to provision Ubuntu VMs with [Hermes Agent](https://hermes-agent.nousresearch.com) from NousResearch.
+Terraform and Ansible to build a host running [Hermes Agent](https://hermes-agent.nousresearch.com)
+from NousResearch — the instance, the agent, its messaging gateway, and enough
+developer tooling for the agent to do real work.
 
-## What it does
+Two layers, deliberately separable. **Terraform** creates the instance, one root
+module per target. **Ansible** turns any reachable Ubuntu 26.04 host into a
+Lycus host and neither knows nor cares which target produced it.
 
-- Creates a dedicated `hermes` user with passwordless sudo
-- Adds your SSH public key to the user's `authorized_keys`
-- Hardens SSH: disables password auth and root login, enforces pubkey-only
-- Installs Hermes Agent via the official install script
-
-## Prerequisites
-
-- Ansible installed on your local machine
-- A target Ubuntu VM reachable over SSH
-- An SSH key already authorized on the VM for the bootstrap user (e.g. `ubuntu`)
-
-## Usage
-
-1. Add your VM to the inventory:
-
-```yaml
-# inventory/hosts.yml
-all:
-  children:
-    hermes_servers:
-      hosts:
-        hermes-vm:
-          ansible_host: 192.168.1.100
-          ansible_user: ubuntu
-      vars:
-        ansible_python_interpreter: /usr/bin/python3
+```
+terraform/proxmox/         ->  \
+                                 >  host_ip, ssh_user, ssh_private_key_path  ->  ansible/site.yml
+terraform/digitalocean/    ->  /
 ```
 
-2. Run the playbook:
+## Documentation
+
+| Document | What it covers |
+|---|---|
+| [SPEC.md](SPEC.md) | What a Lycus host **is**, independent of how it is built |
+| [AUTOMATION.md](AUTOMATION.md) | The Terraform and Ansible that build it |
+| [adr/](adr/adr.md) | **Why** it looks this way — the non-obvious tradeoffs |
+| [backup/README.md](backup/README.md) | What is captured on a migration, and what is not |
+
+If you are about to change something and it seems obviously wrong, read the ADRs
+first. Several of the choices here look like mistakes and are not — see in
+particular [0002](adr/0002-root-installs-hermes-user-runs-it.md), on why the
+installer runs as root even though the agent must not.
+
+## Quick start
 
 ```bash
-ansible-playbook -i inventory/hosts.yml playbooks/hermes.yml
+# 1. create the instance
+cd terraform/proxmox
+cp terraform.tfvars.example terraform.tfvars    # add your SSH public keys
+terraform init && terraform apply
+
+# 2. point Ansible at it
+terraform output -raw inventory_yaml > ../../ansible/inventory/hosts.yml
+
+# 3. build the host
+cd ../..
+ansible-galaxy collection install -r ansible/requirements.yml
+ansible-playbook -i ansible/inventory/hosts.yml ansible/site.yml
 ```
 
-## Configuration
+Proxmox credentials come from `PROXMOX_VE_ENDPOINT` / `PROXMOX_VE_API_TOKEN`;
+DigitalOcean from `DIGITALOCEAN_TOKEN`. Nothing goes in tfvars but public keys
+and sizing.
 
-Variables are defined in `roles/hermes/defaults/main.yml`. Override them in your inventory or with `-e` at runtime.
+The gateway is left **enabled but stopped**. Starting it is a deliberate step —
+see [AUTOMATION.md](AUTOMATION.md#three-things-about-this-that-are-not-obvious).
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `hermes_user` | `hermes` | User created on the VM |
-| `hermes_user_shell` | `/bin/bash` | Login shell |
-| `hermes_user_groups` | `[sudo]` | Supplemental groups |
-| `hermes_ssh_public_keys` | keys from this machine's `authorized_keys` | Keys added to `authorized_keys` |
-| `hermes_install_script` | `https://hermes-agent.nousresearch.com/install.sh` | Installer URL |
+## What you get
 
-## Hermes Agent
+An Ubuntu 26.04 host running Hermes Agent as an unprivileged `hermes` user, with
+Docker, Node.js, uv, Terraform, the GitHub and Azure CLIs, Claude Code, and
+Playwright-driven browsers. Hardened sshd, a swap file sized to survive OOM
+pressure, and secrets kept out of dotfiles.
 
-- Installed via official one-liner; handles Python 3.11, Node.js 22, uv, ripgrep, ffmpeg
-- Binary lands at `~/.local/bin/hermes`
-- Post-install: run `hermes model` to select an LLM provider, `hermes gateway setup` for messaging
-- Data dir: `~/.hermes/` (override with `HERMES_HOME`)
-- Docs: https://hermes-agent.nousresearch.com/docs
+Full detail in [SPEC.md](SPEC.md).
+
+## Testing
+
+```bash
+pip install -r requirements.txt
+cd ansible && molecule test
+```
+
+Converges `base`, `user`, `ssh_hardening` and `docker` in a container, checks
+idempotence, and asserts the resulting host policy. CI runs this on every pull
+request.

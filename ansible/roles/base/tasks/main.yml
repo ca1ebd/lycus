@@ -1,0 +1,65 @@
+---
+- name: Install base packages
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: Set the system timezone
+  community.general.timezone:
+    name: "{{ base_timezone }}"
+  become: true
+  when: base_timezone | length > 0
+
+- name: Import swap tasks
+  ansible.builtin.import_tasks: swap.yml
+  when: base_swap_enabled | bool
+
+- name: Import unattended-upgrades tasks
+  ansible.builtin.import_tasks: unattended_upgrades.yml
+  when: base_unattended_upgrades | bool
+
+- name: Install qemu-guest-agent on KVM guests
+  ansible.builtin.apt:
+    name: qemu-guest-agent
+    state: present
+  become: true
+  when:
+    - base_install_qemu_guest_agent | bool
+    - ansible_virtualization_type | default('') == 'kvm'
+
+# qemu-guest-agent.service binds to a VirtIO serial device the hypervisor only
+# attaches when the guest agent channel is enabled on the VM (and only after a
+# full power cycle). Without it the unit cannot start, so starting it here would
+# fail the run on an otherwise healthy host. Install regardless; start only if
+# the device is actually there.
+- name: Check for the guest agent VirtIO device
+  ansible.builtin.stat:
+    path: /dev/virtio-ports/org.qemu.guest_agent.0
+  register: base_qga_device
+  when: base_install_qemu_guest_agent | bool
+
+- name: Enable qemu-guest-agent
+  ansible.builtin.systemd_service:
+    name: qemu-guest-agent
+    enabled: true
+    state: started
+  become: true
+  when:
+    - base_install_qemu_guest_agent | bool
+    - ansible_virtualization_type | default('') == 'kvm'
+    - ansible_service_mgr == 'systemd'
+    - base_qga_device.stat.exists | default(false)
+
+- name: Report that the guest agent channel is absent
+  ansible.builtin.debug:
+    msg: >-
+      qemu-guest-agent is installed but not started: the hypervisor has not
+      attached /dev/virtio-ports/org.qemu.guest_agent.0. On Proxmox, enable the
+      guest agent on the VM and power-cycle it (stop/start, not reboot).
+  when:
+    - base_install_qemu_guest_agent | bool
+    - ansible_virtualization_type | default('') == 'kvm'
+    - not (base_qga_device.stat.exists | default(false))

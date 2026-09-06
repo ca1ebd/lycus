@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+# Requires DIGITALOCEAN_TOKEN in the environment.
+
+ssh_key_names = ["lycus-vm-access"]
+
+# Narrow this as soon as the host is provisioned.
+# ssh_source_addresses = ["203.0.113.4/32"]

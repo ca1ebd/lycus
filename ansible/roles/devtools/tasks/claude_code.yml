@@ -1,0 +1,16 @@
+---
+- name: Check for Claude Code
+  ansible.builtin.stat:
+    path: "/home/{{ hermes_user }}/.local/bin/claude"
+  register: devtools_claude_bin
+
+- name: Install Claude Code
+  ansible.builtin.shell:
+    cmd: set -o pipefail && curl -fsSL https://claude.ai/install.sh | bash
+    executable: /bin/bash
+  become: true
+  become_user: "{{ hermes_user }}"
+  environment:
+    HOME: "/home/{{ hermes_user }}"
+  when: not devtools_claude_bin.stat.exists
+  changed_when: true

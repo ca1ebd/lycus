@@ -1,0 +1,65 @@
+---
+hermes_user: hermes
+
+hermes_install_script: "https://hermes-agent.nousresearch.com/install.sh"
+
+# Set false to provision everything else without running the Hermes installer.
+# Molecule uses this: the installer pulls a full Python/Node toolchain over the
+# network, which makes CI slow and non-deterministic.
+hermes_install_agent: true
+
+# Where install.sh puts things when it runs as root on Linux. It picks this
+# "FHS layout" from the effective uid, NOT from a flag — running it as the
+# hermes user instead silently produces ~/.hermes/hermes-agent with the command
+# in ~/.local/bin, which is a different install from production.
+hermes_install_dir: /usr/local/lib/hermes-agent
+hermes_command_path: /usr/local/bin/hermes
+
+# Agent data (config, state.db, memories, skills). Deliberately in the user's
+# home rather than root's, so the agent running as hermes owns its own state.
+hermes_home: "/home/{{ hermes_user }}/.hermes"
+
+# Flags that keep install.sh from blocking forever.
+#
+# The installer ends by running its interactive setup wizard, and separately
+# offers to install the gateway service. Both are guarded by `(: </dev/tty)` —
+# but that guard does NOT save you under Ansible: Ansible allocates a pseudo
+# terminal for become, so /dev/tty exists, the guard passes, and the wizard sits
+# waiting on input that never arrives. Observed hanging for 10+ minutes at 0%
+# CPU before this was pinned down.
+#
+# So do not rely on the TTY check. Ask for non-interactive explicitly.
+#
+# --skip-browser because the devtools role already installed Playwright's
+# browsers as the hermes user, into ~hermes/.cache/ms-playwright. The installer
+# runs as root, so its own `npx playwright install --with-deps` would download a
+# second copy into /root/.cache/ms-playwright that the agent — running as hermes
+# — can never read. Several minutes and a few hundred MB for nothing.
+hermes_install_args: "--non-interactive --skip-setup --skip-browser"
+
+# Install and enable the gateway service. With --non-interactive the installer
+# never offers to do this, so the role invokes `hermes gateway install` itself.
+# That is the more robust arrangement anyway: it does not depend on whether a
+# TTY happened to be present.
+# Messaging-platform dependencies.
+#
+# install.sh runs with --skip-setup (its wizard blocks forever under Ansible),
+# and the wizard is what would otherwise install these. Hermes can also
+# lazy-install them on first use via tools.lazy_deps, but that is a runtime
+# side effect we do not want to depend on: without it the gateway starts,
+# reports "Platform 'Telegram' requirements not met", creates no adapter, and
+# silently serves nothing but cron.
+#
+# Pin to what lazy_deps declares (tools/lazy_deps.py) so the built host matches
+# what the agent would have installed itself.
+hermes_platform_packages:
+  - "python-telegram-bot[webhooks]==22.6"
+
+hermes_gateway_service: true
+hermes_gateway_service_name: hermes-gateway
+
+# Enabled but NOT started by default. A fresh box has no credentials yet, and
+# during migration the old host still owns the Telegram bot token — two gateways
+# polling one token fight over updates. Starting is a cutover step, after
+# restore has put the config in place.
+hermes_gateway_started: false

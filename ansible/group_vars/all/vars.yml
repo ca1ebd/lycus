@@ -1,0 +1,11 @@
+---
+# Non-secret defaults shared by every target. Secrets belong in vault.yml,
+# encrypted with ansible-vault — see vault.yml.example.
+hermes_user: hermes
+hermes_home: "/home/{{ hermes_user }}/.hermes"
+
+# Shared because more than one role needs it: the hermes role creates and
+# enables the unit, the restore role stops it before overwriting its state.
+# Relying on the hermes role's defaults reaching the restore role would work
+# but only by accident of play-wide default scoping.
+hermes_gateway_service_name: hermes-gateway

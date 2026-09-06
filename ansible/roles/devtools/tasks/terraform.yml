@@ -1,0 +1,21 @@
+---
+# Pinned and installed from the release zip rather than HashiCorp's apt repo, so
+# the version is explicit and reproducible. The production host has 1.9.8, put
+# there by hand.
+- name: Check the installed Terraform version
+  ansible.builtin.command: terraform version -json
+  register: devtools_tf_current
+  changed_when: false
+  failed_when: false
+
+- name: Install Terraform
+  ansible.builtin.unarchive:
+    src: >-
+      https://releases.hashicorp.com/terraform/{{ devtools_terraform_version }}/terraform_{{ devtools_terraform_version }}_linux_amd64.zip
+    dest: /usr/local/bin
+    remote_src: true
+    mode: "0755"
+    owner: root
+    group: root
+  become: true
+  when: devtools_terraform_version not in (devtools_tf_current.stdout | default(''))

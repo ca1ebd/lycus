@@ -1,0 +1,17 @@
+
+# Local working notes, not part of the deliverable
+scratch/
+
+# Terraform
+**/.terraform/
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/*.tfvars
+**/crash.log
+
+# Per-deployment credentials
+secrets/
+
+# Ansible vault (only the .example is committed)
+ansible/group_vars/all/vault.yml
+**/.terraform.tfstate.lock.info

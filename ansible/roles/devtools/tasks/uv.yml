@@ -1,0 +1,14 @@
+---
+- name: Check for uv
+  ansible.builtin.stat:
+    path: "/home/{{ hermes_user }}/.local/bin/uv"
+  register: devtools_uv_bin
+
+- name: Install uv
+  ansible.builtin.shell:
+    cmd: set -o pipefail && curl -LsSf https://astral.sh/uv/install.sh | sh
+    executable: /bin/bash
+  become: true
+  become_user: "{{ hermes_user }}"
+  when: not devtools_uv_bin.stat.exists
+  changed_when: true

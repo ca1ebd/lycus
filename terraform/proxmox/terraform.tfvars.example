@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+
+ssh_public_keys = [
+  "ssh-ed25519 AAAA... lycus-vm-access",
+]
+
+# Defaults cover the homelab: node sophron, VMID 111, 10.20.30.11/24 on VLAN 7,
+# 8 vCPU / 16 GB / 200 GB. Override here if any of that changes.

@@ -1,0 +1,42 @@
+---
+# Deliberately NOT installing chromium from apt.
+#
+# The `chromium-browser` package is a transitional stub whose only job is to
+# install the snap — 2:1snap1-0ubuntu2 on 24.04, 2:1snap1-0ubuntu4 on 26.04, and
+# Ubuntu ships no real apt chromium either way. That snap pulls
+# in `cups` as a runtime dependency, which on the production host meant a print
+# server listening on 0.0.0.0:631 — on a box with no printer and a public IP.
+#
+# Hermes never used the snap anyway: it drives Playwright's own downloaded
+# browsers under ~/.cache/ms-playwright. So the right split is apt for the
+# system library and font layer, and Playwright's installer for the browsers.
+- name: Install Playwright's system dependencies
+  ansible.builtin.apt:
+    name: "{{ devtools_playwright_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: Check for Playwright browsers
+  ansible.builtin.stat:
+    path: "/home/{{ hermes_user }}/.cache/ms-playwright"
+  register: devtools_playwright_cache
+
+- name: Install Playwright browsers
+  ansible.builtin.shell:
+    cmd: set -o pipefail && npx --yes playwright install chromium webkit
+    executable: /bin/bash
+  become: true
+  become_user: "{{ hermes_user }}"
+  environment:
+    HOME: "/home/{{ hermes_user }}"
+  when: not devtools_playwright_cache.stat.exists
+  changed_when: true
+
+- name: Ensure the cups snap is absent
+  ansible.builtin.command: snap remove cups
+  become: true
+  register: devtools_cups_removed
+  changed_when: "'removed' in devtools_cups_removed.stdout"
+  failed_when: false

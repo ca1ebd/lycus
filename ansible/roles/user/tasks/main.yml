@@ -1,0 +1,83 @@
+---
+- name: Create the hermes group
+  ansible.builtin.group:
+    name: "{{ hermes_user }}"
+    state: present
+  become: true
+
+- name: Create the hermes user
+  ansible.builtin.user:
+    name: "{{ hermes_user }}"
+    group: "{{ hermes_user }}"
+    groups: "{{ hermes_user_groups }}"
+    shell: "{{ hermes_user_shell }}"
+    # append, because other roles own other groups: the docker role adds this
+    # user to `docker`. Without append the default (replace) strips it back out
+    # on every run, and the two roles fight each other indefinitely.
+    append: true
+    create_home: true
+    password_lock: true
+    state: present
+  become: true
+
+- name: Add SSH authorized keys
+  ansible.posix.authorized_key:
+    user: "{{ hermes_user }}"
+    key: "{{ item }}"
+    state: present
+  loop: "{{ hermes_ssh_public_keys }}"
+  become: true
+
+- name: Allow hermes passwordless sudo
+  ansible.builtin.copy:
+    content: "{{ hermes_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    dest: "/etc/sudoers.d/{{ hermes_user }}"
+    mode: "0440"
+    validate: visudo -cf %s
+  become: true
+
+- name: Ensure the user config directory exists
+  ansible.builtin.file:
+    path: "/home/{{ hermes_user }}/{{ hermes_user_env_file | dirname }}"
+    state: directory
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_user }}"
+    mode: "0700"
+  become: true
+
+# Kept 0600 and separate from .bashrc so secrets never sit in a file that is
+# routinely read, diffed or pasted.
+- name: Write the user environment file
+  ansible.builtin.template:
+    src: hermes-env.j2
+    dest: "/home/{{ hermes_user }}/{{ hermes_user_env_file }}"
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_user }}"
+    mode: "0600"
+  become: true
+  no_log: true
+
+- name: Put ~/.local/bin on PATH
+  ansible.builtin.lineinfile:
+    path: "/home/{{ hermes_user }}/.bashrc"
+    line: 'export PATH="{{ item }}:$PATH"'
+    state: present
+    create: true
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_user }}"
+    mode: "0644"
+  loop: "{{ hermes_user_path_entries }}"
+  become: true
+
+- name: Source the environment file from .bashrc
+  ansible.builtin.blockinfile:
+    path: "/home/{{ hermes_user }}/.bashrc"
+    marker: "# {mark} managed by lycus"
+    create: true
+    owner: "{{ hermes_user }}"
+    group: "{{ hermes_user }}"
+    mode: "0644"
+    block: |
+      # Secrets live in a 0600 file, not inline in this one.
+      [ -f "$HOME/{{ hermes_user_env_file }}" ] && . "$HOME/{{ hermes_user_env_file }}"
+  become: true

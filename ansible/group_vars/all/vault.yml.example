@@ -1,0 +1,12 @@
+---
+# Copy to vault.yml and encrypt:
+#   ansible-vault encrypt ansible/group_vars/all/vault.yml
+#
+# These become ~/.config/hermes-env on the target (mode 0600, sourced from
+# .bashrc). They are deliberately NOT written into .bashrc itself — that is how
+# the production host ended up with a GitHub PAT in plain text in a
+# world-readable dotfile.
+hermes_user_env:
+  GITHUB_PAT: "github_pat_..."
+  # Agent credentials live in ~/.hermes/.env, restored from the backup tarball
+  # rather than templated here.
