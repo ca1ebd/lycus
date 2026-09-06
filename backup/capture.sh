@@ -1,79 +1,133 @@
 #!/usr/bin/env bash
-# Capture the irreplaceable state from a running Lycus host.
+# Capture state from a running Lycus host.
 #
-# Everything this does NOT capture is rebuildable by ansible/site.yml: packages,
-# toolchain, services, and the ~948 MB Playwright browser cache (`playwright
-# install` regenerates it), ~/.npm, and ~/.vscode-server. Those three are most
-# of what made the old droplet's disk look full, and carrying them across would
-# just move the problem.
+# Two tiers, because they have very different costs:
 #
-# Run this on the SOURCE host. Output is a single tarball for roles/restore.
+#   agent  (default) — everything that makes the agent *itself*: config,
+#                      credentials, skills, memories, kanban, cron. ~19 MB of
+#                      plain files. Nothing here is a live database, so the
+#                      gateway does not need stopping.
+#
+#   history (--with-history) — ~/.hermes/state.db, which holds conversation
+#                      history and nothing else: a `messages` table, a
+#                      `sessions` table, and FTS indexes over them. ~35 MB plus
+#                      a WAL. The agent is fully functional without it; you lose
+#                      recall and search of past conversations. Because it is a
+#                      live SQLite database in WAL mode, capturing it means
+#                      stopping the writer first.
+#
+# Not captured either way: ~/.cache/ms-playwright, ~/.npm, ~/.vscode-server and
+# ~/.hermes/logs — all rebuildable, and together most of why the old host's disk
+# was full.
 set -euo pipefail
 
 USER_NAME="${LYCUS_USER:-hermes}"
 HOME_DIR="/home/${USER_NAME}"
-OUT="${1:-/tmp/lycus-backup-$(date +%Y%m%d-%H%M%S).tar.gz}"
+HERMES_HOME="${HERMES_HOME:-${HOME_DIR}/.hermes}"
 GATEWAY="${LYCUS_GATEWAY_SERVICE:-hermes-gateway}"
+WITH_HISTORY=false
+OUT=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --with-history) WITH_HISTORY=true; shift ;;
+    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+    *) OUT="$1"; shift ;;
+  esac
+done
+OUT="${OUT:-/tmp/lycus-backup-$(date +%Y%m%d-%H%M%S).tar.gz}"
 
 log() { printf '==> %s\n' "$*" >&2; }
+die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
-# state.db is SQLite in WAL mode. Copying it hot risks capturing a torn database
-# with a live WAL, so stop the writer first and checkpoint.
-gateway_was_running=false
-if systemctl is-active --quiet "${GATEWAY}" 2>/dev/null; then
-  gateway_was_running=true
-  log "Stopping ${GATEWAY} so state.db can be quiesced"
-  sudo systemctl stop "${GATEWAY}"
+# Refuse to run from inside the gateway's own cgroup.
+#
+# The Hermes gateway is a system service with KillMode=mixed, and anything it
+# spawns stays in its cgroup — systemd tracks by cgroup, not by parent, so
+# daemonizing does not escape it. Agents launched by the gateway therefore live
+# there too, and the `gateway stop` below would SIGKILL the very process running
+# this script, mid-backup. That happened repeatedly before it was diagnosed.
+#
+# Launch agents with `systemd-run --scope` (see the claude-remote-sessions
+# skill), or run this from an ordinary login shell.
+if grep -q 'hermes-gateway\.service' /proc/self/cgroup 2>/dev/null; then
+  die "running inside hermes-gateway.service's cgroup — stopping the gateway would kill this script. Relaunch under 'systemd-run --scope' or run from a login shell."
 fi
 
-restore_gateway() {
-  if [ "${gateway_was_running}" = true ]; then
-    log "Restarting ${GATEWAY}"
-    sudo systemctl start "${GATEWAY}" || true
-  fi
-}
-trap restore_gateway EXIT
-
-if [ -f "${HOME_DIR}/.hermes/state.db" ] && command -v sqlite3 >/dev/null 2>&1; then
-  log "Checkpointing state.db WAL"
-  sqlite3 "${HOME_DIR}/.hermes/state.db" 'PRAGMA wal_checkpoint(TRUNCATE);' || true
-fi
-
-INCLUDE=(
-  ".hermes"
+# Everything that defines the agent. All plain files — no live databases, so
+# these are safe to read while the gateway runs.
+AGENT_PATHS=(
+  ".hermes/config.yaml"
+  ".hermes/.env"
+  ".hermes/auth.json"
+  ".hermes/memories"
+  ".hermes/skills"
+  ".hermes/cron"
+  ".hermes/kanban.db"
+  ".hermes/channel_directory.json"
+  ".hermes/SOUL.md"
   ".ssh"
   ".claude"
   ".claude.json"
   ".wireguard"
   ".gitconfig"
   ".config"
-  ".azure"
-  ".docker"
-  "projects"
-  "resume-tailoring"
 )
 
-EXCLUDE=(
-  --exclude=".hermes/audio_cache"
-  --exclude=".hermes/image_cache"
-  --exclude=".hermes/models_dev_cache.json"
-  --exclude=".hermes/cache"
-  --exclude=".claude/plugins/cache"
-  --exclude="**/node_modules"
-  --exclude="**/.terraform"
-)
+if [ "${WITH_HISTORY}" = true ]; then
+  # state.db is SQLite in WAL mode. Copying it hot risks a torn database with an
+  # unmerged WAL, so stop the writer and checkpoint first.
+  if systemctl is-active --quiet "${GATEWAY}" 2>/dev/null; then
+    log "Stopping ${GATEWAY} so state.db can be quiesced"
+    # Prefer the CLI over systemctl: `gateway stop` drains in-flight work and
+    # shuts the agent down cleanly, where systemctl just delivers SIGTERM.
+    # --system because the unit is system-scope (see adr/0002).
+    if command -v hermes >/dev/null 2>&1; then
+      sudo hermes gateway stop --system || sudo systemctl stop "${GATEWAY}"
+    else
+      sudo systemctl stop "${GATEWAY}"
+    fi
+    trap 'log "Restarting ${GATEWAY}"; sudo systemctl start "${GATEWAY}" || true' EXIT
+  fi
+  # Merge the WAL into the main database. Without this we would capture
+  # state.db while its most recent messages still live in a separate -wal file,
+  # producing a database that is silently missing data. Not every host has the
+  # sqlite3 CLI, so fall back to Python's module, which is always present here.
+  if [ -f "${HERMES_HOME}/state.db" ]; then
+    log "Checkpointing state.db WAL"
+    if command -v sqlite3 >/dev/null 2>&1; then
+      sqlite3 "${HERMES_HOME}/state.db" 'PRAGMA wal_checkpoint(TRUNCATE);' || true
+    else
+      python3 - "${HERMES_HOME}/state.db" <<'PYEOF' || true
+import sqlite3, sys
+con = sqlite3.connect(sys.argv[1])
+con.execute('PRAGMA wal_checkpoint(TRUNCATE);')
+con.close()
+PYEOF
+    fi
+  fi
+
+  AGENT_PATHS+=(".hermes/state.db")
+  # Belt and braces: if the checkpoint did not fully drain the WAL, carry the
+  # sidecar files too rather than shipping a torn database.
+  for sidecar in "state.db-wal" "state.db-shm"; do
+    [ -f "${HERMES_HOME}/${sidecar}" ] && AGENT_PATHS+=(".hermes/${sidecar}")
+  done
+else
+  log "Skipping conversation history (state.db). Pass --with-history to include it."
+fi
 
 present=()
-for path in "${INCLUDE[@]}"; do
-  if [ -e "${HOME_DIR}/${path}" ]; then
-    present+=("${path}")
-  else
-    log "skipping ${path} (not present)"
-  fi
+for p in "${AGENT_PATHS[@]}"; do
+  if [ -e "${HOME_DIR}/${p}" ]; then present+=("${p}"); else log "skipping ${p} (absent)"; fi
 done
 
 log "Writing ${OUT}"
-tar czf "${OUT}" -C "${HOME_DIR}" "${EXCLUDE[@]}" "${present[@]}"
+tar czf "${OUT}" -C "${HOME_DIR}" \
+  --exclude='.claude/plugins/cache' \
+  --exclude='**/node_modules' \
+  --exclude='**/.terraform' \
+  "${present[@]}"
 
 log "Done: $(du -h "${OUT}" | cut -f1) at ${OUT}"
-log "Repos with no git remote must be captured separately — see backup/README.md"
+log "Repos with no git remote are captured separately — see backup/README.md"

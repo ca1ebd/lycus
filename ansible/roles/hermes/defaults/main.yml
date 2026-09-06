@@ -41,6 +41,20 @@ hermes_install_args: "--non-interactive --skip-setup --skip-browser"
 # never offers to do this, so the role invokes `hermes gateway install` itself.
 # That is the more robust arrangement anyway: it does not depend on whether a
 # TTY happened to be present.
+# Messaging-platform dependencies.
+#
+# install.sh runs with --skip-setup (its wizard blocks forever under Ansible),
+# and the wizard is what would otherwise install these. Hermes can also
+# lazy-install them on first use via tools.lazy_deps, but that is a runtime
+# side effect we do not want to depend on: without it the gateway starts,
+# reports "Platform 'Telegram' requirements not met", creates no adapter, and
+# silently serves nothing but cron.
+#
+# Pin to what lazy_deps declares (tools/lazy_deps.py) so the built host matches
+# what the agent would have installed itself.
+hermes_platform_packages:
+  - "python-telegram-bot[webhooks]==22.6"
+
 hermes_gateway_service: true
 hermes_gateway_service_name: hermes-gateway
 

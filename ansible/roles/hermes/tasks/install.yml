@@ -59,6 +59,57 @@
   register: hermes_layout
   failed_when: not hermes_layout.stat.exists
 
+# The venv is created by uv, which does not install pip into it — so
+# `venv/bin/pip` simply does not exist and the pip module fails with a bare
+# rc=2 and no stderr. ensurepip is stdlib and bootstraps it in place.
+# Probe the module, not the bin/pip path: ensurepip installs pip3 and pip3.11
+# but no plain `pip`, so a stat on venv/bin/pip is always false and this would
+# re-run forever.
+- name: Check whether the agent venv has pip
+  ansible.builtin.command:
+    cmd: "{{ hermes_install_dir }}/venv/bin/python -m pip --version"
+  become: true
+  register: hermes_venv_pip
+  changed_when: false
+  failed_when: false
+  when: hermes_platform_packages | length > 0
+
+- name: Bootstrap pip into the agent venv
+  ansible.builtin.command:
+    cmd: "{{ hermes_install_dir }}/venv/bin/python -m ensurepip --upgrade"
+  become: true
+  when:
+    - hermes_platform_packages | length > 0
+    - hermes_venv_pip.rc | default(1) != 0
+  changed_when: true
+
+# Probe rather than letting pip decide, so this stays a no-op on a converged
+# host instead of reporting changed on every run.
+- name: Check which platform modules are already importable
+  ansible.builtin.command:
+    cmd: "{{ hermes_install_dir }}/venv/bin/python -c 'import telegram'"
+  become: true
+  register: hermes_platform_probe
+  changed_when: false
+  failed_when: false
+  when: hermes_platform_packages | length > 0
+
+# `python -m pip`, not ansible.builtin.pip with an `executable`. ensurepip
+# creates pip3 and pip3.11 in the venv but no plain `pip`, so the module cannot
+# find its executable and fails with a bare rc=2 and empty stderr — which looks
+# like a broken package rather than a missing symlink. The module form always
+# works.
+- name: Install messaging-platform dependencies
+  ansible.builtin.command:
+    cmd: >-
+      {{ hermes_install_dir }}/venv/bin/python -m pip install
+      {{ hermes_platform_packages | map('quote') | join(' ') }}
+  become: true
+  when:
+    - hermes_platform_packages | length > 0
+    - hermes_platform_probe.rc | default(1) != 0
+  changed_when: true
+
 # The installer runs as root, so anything it creates under HERMES_HOME lands
 # root-owned. The agent runs as hermes and must own its own state.
 - name: Ensure the agent owns its data directory
