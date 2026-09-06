@@ -76,6 +76,15 @@ AGENT_PATHS=(
   ".wireguard"
   ".gitconfig"
   ".config"
+  ".docker"
+  # Cloud CLI credentials. Re-authenticating is possible but tedious, and
+  # .azure in particular holds service-principal state used by other projects.
+  ".azure"
+  ".fly"
+  # Working directories that are not git repositories and exist nowhere else.
+  # Easy to forget precisely because they are not repos — nothing warns you.
+  "projects"
+  "resume-tailoring"
 )
 
 if [ "${WITH_HISTORY}" = true ]; then
