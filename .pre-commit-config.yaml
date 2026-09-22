@@ -1,0 +1,6 @@
+repos:
+  - repo: https://github.com/ca1ebd/claude-attribution-guard
+    rev: v1.0.0
+    hooks:
+      - id: no-claude-attribution-commit-msg
+      - id: no-claude-attribution-pre-push
