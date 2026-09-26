@@ -61,7 +61,11 @@ resource "proxmox_virtual_environment_vm" "lycus" {
       }
     }
 
-    # DHCP is disabled on this VLAN, so nothing hands out resolvers either.
+    # Static address, so resolvers must be declared here. Changing them on a
+    # built host changes the NoCloud instance-id (a hash of user-data +
+    # network-config), and cloud-init then re-runs first-boot modules on the
+    # next reboot: new SSH host keys, default user, package upgrade. Change a
+    # running host's DNS inside the guest instead.
     dns {
       servers = var.vm_dns_servers
     }

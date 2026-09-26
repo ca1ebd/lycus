@@ -149,7 +149,7 @@ variable "vm_agent_timeout" {
 }
 
 variable "vm_dns_servers" {
-  description = "Resolvers for the guest. DHCP is disabled on this VLAN, so nothing supplies these automatically."
+  description = "Resolvers for the guest. The address is static, so nothing DHCP hands out applies. The homelab's AdGuard DNS VIP (dns1/dns2) first; 1.1.1.1 keeps public names resolving if it's down."
   type        = list(string)
-  default     = ["10.20.30.1", "1.1.1.1"]
+  default     = ["10.20.30.53", "1.1.1.1"]
 }
